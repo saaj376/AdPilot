@@ -148,21 +148,6 @@ albus-dumbledore/
 ├── requirements.txt
 └── README.md
 ```
-
----
-
-## 🛣️ Roadmap
-
-- [ ] Research Agent — web scraping + competitor analysis
-- [ ] Keyword Agent — Keyword Planner API + intent clustering
-- [ ] Creative Agent — LLM-powered ad copy generation
-- [ ] QA Agent — policy compliance checker
-- [ ] Launch Agent — Google Ads API campaign creation
-- [ ] Monitor Agent — real-time performance anomaly detection
-- [ ] Optimize Agent — automated bid + budget management
-- [ ] Report Agent — weekly plain-English summaries
-- [ ] Dashboard UI — visual campaign health overview
-
 ---
 
 ## 🤝 Contributing
