@@ -1,2 +1,2 @@
-# Protego
-Protego is a behavior-aware API security layer that protects systems from credential-valid abuse—attacks where API requests are fully authenticated and authorized, yet malicious in intent.
+# Albus Dumbledore
+Just as Dumbledore orchestrates every member of the Order with wisdom and purpose, Project Albus deploys a team of specialized AI agents — each with a distinct role — that autonomously research, build, launch, monitor, and optimize Google Ads campaigns from end to end.
