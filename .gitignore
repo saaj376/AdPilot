@@ -205,3 +205,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Google OAuth credentials
+backend/client_secret_1003887054540-77uns74giam29iahdp6e42u9pi8jqs0p.apps.googleusercontent.com.json
