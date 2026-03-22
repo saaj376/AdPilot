@@ -1,6 +1,6 @@
 from crewai_tools import MCPTool
 
-from app.config import settings
+from config import settings
 
 
 # The official Google Ads MCP server is now installed directly
