@@ -1,21 +1,20 @@
 from crewai_tools import MCPTool
 
-from config import settings
+from app.config import settings
 
 
-# This file wires up the official Google Ads MCP server for MonitorAgent.
+# The official Google Ads MCP server is now installed directly
+# in your .venv via: pip install git+https://github.com/googleads/google-ads-mcp.git
 #
-# The MCP server is READ-ONLY — it can only fetch data, never change anything.
-# That's exactly what MonitorAgent needs: read campaign performance data.
+# Because it's installed as a package (not run via pipx),
+# we launch it using the installed command "google-ads-mcp"
+# directly — no pipx needed.
 #
-# How it works:
-# - The MCP server is NOT a network service you connect to via URL
-# - It runs as a local subprocess on your machine, launched by MCPTool
-# - MCPTool starts it automatically when MonitorAgent calls a tool
-# - It communicates via stdio (standard input/output), not HTTP
+# This tool is READ-ONLY — it can only fetch data, never change anything.
+# That's exactly what MonitorAgent needs: read campaign performance via GAQL.
 #
-# The MCP server exposes two tools to the agent:
-#   1. list_accessible_customers — lists all Google Ads accounts you have access to
+# Two tools exposed to the agent:
+#   1. list_accessible_customers — lists all Google Ads accounts you can access
 #   2. search — runs a GAQL query and returns performance data
 #
 # MonitorAgent uses "search" to ask things like:
@@ -24,16 +23,30 @@ from config import settings
 
 
 def get_mcp_reader() -> MCPTool:
+    """
+    Returns an MCPTool that launches the official Google Ads MCP server.
+
+    Since google-ads-mcp is installed in your .venv via pip,
+    we launch it using the installed "google-ads-mcp" command directly.
+
+    MCPTool handles:
+    - Starting the process
+    - Passing credentials as environment variables
+    - Sending tool calls (like "search") to the process
+    - Returning results to the agent
+    """
     return MCPTool(
-        command="pipx",
-        args=[
-            "run",
-            "--spec",
-            "git+https://github.com/googleads/google-ads-mcp.git",
-            "google-ads-mcp",
-        ],
+        # Launch the installed command directly — no pipx needed
+        command="google-ads-mcp",
+        args=[],
+
+        # Credentials passed as env vars to the subprocess
+        # These come from your .env via settings.google_ads_mcp_env
         env=settings.google_ads_mcp_env,
     )
 
 
+# Module-level singleton — created once, imported by MonitorAgent only.
+# Do NOT import this into LaunchAgent, OptimizeAgent etc.
+# Those agents use the SDK tools in google_ads_sdk_tools.py instead.
 mcp_reader = get_mcp_reader()
