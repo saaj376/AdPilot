@@ -6,10 +6,6 @@ from core.campaign_context import CampaignContext
 _redis_client: aioredis.Redis | None = None
 
 def get_redis() -> aioredis.Redis:
-    """
-    Returns a shared async Redis client.
-    Initialised once on first call — reused for the lifetime of the app.
-    """
     global _redis_client
     if _redis_client is None:
         _redis_client = aioredis.from_url(
@@ -20,10 +16,6 @@ def get_redis() -> aioredis.Redis:
     return _redis_client
 
 async def check_redis_health() -> None:
-    """
-    Called by main.py startup — confirms Redis is reachable
-    before the server accepts any requests.
-    """
     try:
         client = get_redis()
         await client.ping()
@@ -35,8 +27,6 @@ async def check_redis_health() -> None:
             f"Error: {e}"
         )
  
- 
-# ─── Campaign context ─────────────────────────────────────────────────────────
  
 def _context_key(campaign_id: str) -> str:
     return f"campaign:{campaign_id}"
@@ -72,9 +62,6 @@ async def delete_context(campaign_id: str) -> None:
     """Removes a campaign context from Redis."""
     client = get_redis()
     await client.delete(_context_key(campaign_id))
- 
- 
-# ─── Campaign ID list ─────────────────────────────────────────────────────────
  
 _CAMPAIGN_IDS_KEY = "active_campaign_ids"
  
