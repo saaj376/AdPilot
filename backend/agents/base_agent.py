@@ -39,10 +39,13 @@ class BaseAgent:
             tools=[scrape_website, search_competitors],
         )
     """
+
+    # Shared LLM instance — all agents use the same Ollama gemma3:4b
     _llm = None
 
     @classmethod
     def _get_llm(cls):
+        # Create the LLM once and reuse it across all agents
         if cls._llm is None:
             cls._llm = get_llm()
         return cls._llm
