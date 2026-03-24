@@ -53,32 +53,20 @@ def test_google_ads_sdk_accessible_customers_live():
 
 
 @pytest.mark.integration
-def test_google_ads_keyword_planner_live():
-    """Call real Keyword Planner through the SDK tool wrapper and print output."""
-    try:
-        keywords = get_keyword_ideas.run(
-            seed_keywords=["pizza delivery", "wood fired pizza"],
-            location="Austin, TX",
-        )
-    except MethodNotImplemented as exc:
-        pytest.skip(
-            "Keyword Planner endpoint appears unavailable for the configured SDK/API version. "
-            f"Details: {exc}"
-        )
+def test_keyword_generation_without_keyword_planner_live():
+    """Validate keyword generation path without calling Keyword Planner endpoint."""
+    keywords = get_keyword_ideas.run(
+        seed_keywords=["pizza delivery", "wood fired pizza"],
+        location="Austin, TX",
+    )
 
-    print("\n=== Google Ads Keyword Planner sample ===")
+    print("\n=== Heuristic keyword generation sample ===")
     print(json.dumps(keywords[:10], indent=2))
 
     assert isinstance(keywords, list)
     assert len(keywords) > 0
     if isinstance(keywords[0], dict) and "error" in keywords[0]:
-        err = str(keywords[0]["error"])
-        if "DEVELOPER_TOKEN_NOT_APPROVED" in err:
-            pytest.skip(
-                "Developer token is test-only and not approved for non-test accounts. "
-                "Apply for Basic/Standard Google Ads API access."
-            )
-        pytest.fail(f"Keyword Planner returned API error: {err}")
+        pytest.fail(f"Keyword generation returned error: {keywords[0]['error']}")
     assert "text" in keywords[0]
 
 

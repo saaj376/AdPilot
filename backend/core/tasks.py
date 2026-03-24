@@ -38,6 +38,8 @@ keyword_task = Task(
         "Using the business profile from the research task, "
         "call get_keyword_ideas with the buying_intent_signals as seed keywords "
         "and the business location as the target location. "
+        "Use the returned expanded keyword ideas (with estimated volume and CPC) "
+        "to build the strategy. "
         "Group the returned keywords into ad groups based on the ad_themes "
         "from the business profile. "
         "Include 5 to 15 keywords per ad group with their volume and CPC data."

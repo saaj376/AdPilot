@@ -5,7 +5,7 @@ keyword_agent=BaseAgent.build(
     role="Google Ads Keyword Strategist",
  
     goal=(
-        "Build a focused keyword strategy using real Google search volume data. "
+        "Build a focused keyword strategy using high-intent keyword expansions. "
         "Group keywords into themes that map to ad groups. "
         "Prioritise high-intent keywords with reasonable CPC for the budget."
     ),
@@ -13,7 +13,7 @@ keyword_agent=BaseAgent.build(
     backstory=(
         "You are an expert Google Ads keyword strategist with deep knowledge "
         "of search intent and keyword planning. "
-        "You use the Google Keyword Planner to find the best keywords "
+        "You use keyword expansion patterns and intent modifiers to find the best keywords "
         "for a business based on its profile and target audience. "
         "You group keywords by intent and theme — not just by topic — "
         "so each ad group has tightly related keywords that share the same ad copy. "
@@ -28,12 +28,12 @@ keyword_agent=BaseAgent.build(
 
 # KeywordAgent builds the keyword strategy for the campaign.
 #
-# It uses get_keyword_ideas (Google Keyword Planner via SDK) to get
-# real search volume and CPC data for keywords related to the business.
+# It uses get_keyword_ideas (heuristic expansion tool) to generate
+# keyword ideas with estimated search volume and CPC.
 #
 # It reads business_profile from the task context (written by ResearchAgent)
 # and uses the buying_intent_signals and ad_themes from that profile
-# as seed keywords to feed into the Keyword Planner.
+# as seed keywords for expansion.
 #
 # Output goes into CampaignContext.keyword_strategy and is used by:
 #   - CreativeAgent  → to write headlines around the top keywords
