@@ -1,6 +1,6 @@
 import httpx
 from bs4 import BeautifulSoup
-from crewai import tool
+from crewai.tools import tool
 
 
 # These are the web scraping tools used by ResearchAgent.
@@ -42,6 +42,7 @@ def _extract_text(html: str, max_chars: int = 3000) -> str:
 
 @tool("Scrape website")
 def scrape_website(url: str) -> str:
+    """Fetch a URL and return cleaned visible page text for research context."""
     try:
         with httpx.Client(headers=HEADERS, timeout=10.0, follow_redirects=True) as client:
             response = client.get(url)

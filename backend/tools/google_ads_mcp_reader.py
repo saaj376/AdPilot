@@ -1,4 +1,9 @@
-from crewai_tools import MCPTool
+from crewai.tools import tool
+
+try:
+    from crewai_tools import MCPTool
+except Exception:
+    MCPTool = None
 
 from config import settings
 
@@ -46,7 +51,17 @@ def get_mcp_reader() -> MCPTool:
     )
 
 
+@tool("Google Ads MCP fallback")
+def _mcp_unavailable_fallback(query: str = "") -> str:
+    """Explain that crewai-tools is unavailable or incompatible in this environment."""
+    return (
+        "Google Ads MCP tool is unavailable because the installed 'crewai' and "
+        "'crewai-tools' versions are incompatible in this environment. "
+        "Install compatible versions, then restart the backend."
+    )
+
+
 # Module-level singleton — created once, imported by MonitorAgent only.
 # Do NOT import this into LaunchAgent, OptimizeAgent etc.
 # Those agents use the SDK tools in google_ads_sdk_tools.py instead.
-mcp_reader = get_mcp_reader()
+mcp_reader = get_mcp_reader() if MCPTool is not None else _mcp_unavailable_fallback
