@@ -1,5 +1,5 @@
 from agents.base_agent import BaseAgent
-from tools.google_ads_mcp_reader import mcp_reader
+from tools.google_ads_mcp_reader import mcp_list_accessible_customers, mcp_reader
 
 monitor_agent = BaseAgent.build(
     role="Campaign Performance Analyst",
@@ -22,9 +22,8 @@ monitor_agent = BaseAgent.build(
         "You always respond with valid JSON only. No markdown, no explanation."
     ),
  
-    # mcp_reader is the official Google Ads MCP server — read-only
-    # Exposes: list_accessible_customers, search (GAQL)
-    tools=[mcp_reader],
+    # Direct MCP bridge tools (option B) — read-only access to Google Ads data
+    tools=[mcp_list_accessible_customers, mcp_reader],
 )
 
 # MonitorAgent reads live campaign performance from Google Ads.

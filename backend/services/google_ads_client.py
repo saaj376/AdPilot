@@ -18,10 +18,7 @@ def get_client() -> GoogleAdsClient:
         # load_from_dict reads our credentials from settings
         # settings.google_ads_sdk_config is the property in config.py
         # that assembles the dict from all the GOOGLE_ADS_* env vars
-        _client = GoogleAdsClient.load_from_dict(
-            settings.google_ads_sdk_config,
-            version="v18",   # current stable Google Ads API version
-        )
+        _client = GoogleAdsClient.load_from_dict(settings.google_ads_sdk_config)
     return _client
 
 def check_sdk_credentials() -> None:

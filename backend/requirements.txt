@@ -13,7 +13,7 @@ ollama==0.4.4
 litellm==1.52.9
 
 # ─── Google Ads API ──────────────────────────────────────────────────────────
-google-ads==24.1.0
+google-ads==29.2.0
 google-auth==2.36.0
 google-auth-oauthlib==1.2.1
 

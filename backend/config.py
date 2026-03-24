@@ -33,8 +33,9 @@ class Settings(BaseSettings):
 
     # ─── Google Ads MCP — MonitorAgent only (reads via GAQL) ──────────────────
     # MCP server runs as a local subprocess — no URL needed
-    # credentials.json = OAuth2 JSON downloaded from Google Cloud Console
-    GOOGLE_APPLICATION_CREDENTIALS: str = ""   # /absolute/path/to/credentials.json
+    # Must be ADC credentials JSON (service account or authorized_user),
+    # not an OAuth client_secret JSON downloaded from API credentials page.
+    GOOGLE_APPLICATION_CREDENTIALS: str = ""   # /absolute/path/to/adc_credentials.json
     GOOGLE_PROJECT_ID: str = ""                # e.g. albus-490718
 
     # ─── CORS ─────────────────────────────────────────────────────────────────
@@ -59,6 +60,7 @@ class Settings(BaseSettings):
         return {
             "GOOGLE_APPLICATION_CREDENTIALS": self.GOOGLE_APPLICATION_CREDENTIALS,
             "GOOGLE_PROJECT_ID":              self.GOOGLE_PROJECT_ID,
+            "GOOGLE_CLOUD_PROJECT":           self.GOOGLE_PROJECT_ID,
             "GOOGLE_ADS_DEVELOPER_TOKEN":     self.GOOGLE_ADS_DEVELOPER_TOKEN,
         }
 

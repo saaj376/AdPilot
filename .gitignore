@@ -208,3 +208,8 @@ __marimo__/
 
 # Google OAuth credentials
 backend/client_secret_1003887054540-77uns74giam29iahdp6e42u9pi8jqs0p.apps.googleusercontent.com.json
+
+# Local Google Ads/MCP runtime artifacts
+backend/adc_authorized_user.json
+backend/.mcp-runtime/
+backend/.mcp-runtime-check/
