@@ -1,4 +1,4 @@
-from crewai import tool
+from crewai.tools import tool
 from google.ads.googleads.errors import GoogleAdsException
 
 from config import settings
