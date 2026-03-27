@@ -10,6 +10,7 @@ export interface AgentRunState {
 	status: AgentStatus
 	started_at: string | null
 	finished_at: string | null
+	output?: unknown | null
 	logs: AgentLogItem[]
 }
 
@@ -25,6 +26,7 @@ export interface WebSocketAgentUpdateMessage {
 	campaign_id: string
 	agent_name: string
 	status: AgentStatus
+	output?: unknown | null
 	log: AgentLogItem | null
 	timestamp: string
 }

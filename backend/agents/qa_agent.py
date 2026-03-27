@@ -12,6 +12,9 @@ qa_agent = BaseAgent.build(
 
     backstory=load_prompt("qa_policy.txt"),
     tools=[],
+    # Pure LLM agent — no tools. Disabling the ReAct system prompt so the LLM
+    # can write Final Answer directly without triggering parse-error retry loops.
+    use_system_prompt=False,
 )
 
 

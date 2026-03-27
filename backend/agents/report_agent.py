@@ -13,6 +13,9 @@ report_agent = BaseAgent.build(
 
     # No tools — pure LLM writing task
     tools=[],
+    # Pure LLM agent — no tools. Disabling the ReAct system prompt so the LLM
+    # can write Final Answer directly without triggering parse-error retry loops.
+    use_system_prompt=False,
 )
 
 # ReportAgent is the last agent in the pipeline.

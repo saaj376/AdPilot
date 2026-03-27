@@ -42,5 +42,6 @@ class PipelineEvent(BaseModel):
     campaign_id: str
     agent_name:  str
     status:      AgentStatus
+    output:      dict | None       = None
     log:         AgentLog | None    = None
     timestamp:   datetime           = Field(default_factory=datetime.utcnow)
