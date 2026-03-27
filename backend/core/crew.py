@@ -1,5 +1,6 @@
 import asyncio
-from uuid import uuid4
+import concurrent.futures
+from collections.abc import Coroutine
 from crewai import Crew, Process
 from core.campaign_context import AgentName, CampaignContext
 from core.tasks import (
@@ -71,7 +72,63 @@ _AGENT_OUTPUT_FIELD = {
     AgentName.REPORT:    "weekly_report",
 }
 
-def build_crew(context: CampaignContext) -> Crew:
+_STEP_ORDER = [
+    AgentName.RESEARCH,
+    AgentName.KEYWORD,
+    AgentName.CREATIVE,
+    AgentName.QA,
+    AgentName.LAUNCH,
+    AgentName.MONITOR,
+    AgentName.OPTIMIZE,
+    AgentName.REPORT,
+]
+
+
+def _resolve_agent_name(step_output, fallback_index: int) -> str:
+    """Resolve agent name from CrewAI callback payload with safe fallbacks."""
+    # CrewAI can provide either a role string or an Agent object with .role.
+    raw_agent = getattr(step_output, "agent", None)
+
+    role_candidates: list[str] = []
+    if isinstance(raw_agent, str):
+        role_candidates.append(raw_agent)
+    else:
+        role_value = getattr(raw_agent, "role", None)
+        if isinstance(role_value, str):
+            role_candidates.append(role_value)
+
+        stringified = str(raw_agent) if raw_agent is not None else ""
+        if stringified:
+            role_candidates.append(stringified)
+
+    for candidate in role_candidates:
+        if candidate in _ROLE_TO_AGENT_NAME:
+            return _ROLE_TO_AGENT_NAME[candidate]
+
+    # Final fallback: trust sequential task order for Process.sequential.
+    if 0 <= fallback_index < len(_STEP_ORDER):
+        return _STEP_ORDER[fallback_index]
+
+    return ""
+
+
+def _normalize_field_value(field: str, output: dict) -> dict | str:
+    """Coerce agent output into the destination CampaignContext field shape."""
+    if field != "weekly_report":
+        return output
+
+    if isinstance(output, dict):
+        week_summary = output.get("week_summary")
+        if isinstance(week_summary, str) and week_summary.strip():
+            return week_summary
+
+        raw_value = output.get("raw")
+        if isinstance(raw_value, str) and raw_value.strip():
+            return raw_value
+
+    return str(output)
+
+def build_crew(context: CampaignContext, event_loop: asyncio.AbstractEventLoop) -> Crew:
     """
     Assembles the CrewAI Crew for a full pipeline run.
     Called once per campaign by run_crew().
@@ -82,9 +139,25 @@ def build_crew(context: CampaignContext) -> Crew:
  
     # step_callback fires after each task completes
     # We use it to update context, save to Redis, and push WebSocket events
+    def _schedule(coro: Coroutine) -> None:
+        """Schedule coroutine from either event-loop or worker-thread callbacks."""
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+
+        if running_loop is event_loop:
+            asyncio.create_task(coro)
+            return
+
+        event_loop.call_soon_threadsafe(lambda: asyncio.create_task(coro))
+
+    step_index = 0
+
     def on_step(step_output):
-        agent_role = step_output.agent if hasattr(step_output, "agent") else ""
-        agent_name = _ROLE_TO_AGENT_NAME.get(agent_role, "")
+        nonlocal step_index
+        agent_name = _resolve_agent_name(step_output, step_index)
+        step_index += 1
  
         if not agent_name:
             return
@@ -92,7 +165,7 @@ def build_crew(context: CampaignContext) -> Crew:
         output = _parse_agent_output(step_output)
         field = _AGENT_OUTPUT_FIELD.get(agent_name)
         if field and hasattr(context, field):
-            setattr(context, field, output)
+            setattr(context, field, _normalize_field_value(field, output))
         context.set_agent_done(agent_name, output=output)
  
         # Log a completion message
@@ -104,7 +177,7 @@ def build_crew(context: CampaignContext) -> Crew:
  
         # Save updated context to Redis after every agent
         # This means progress is never lost if the server restarts mid-pipeline
-        asyncio.create_task(save_context(context.campaign_id, context))
+        _schedule(save_context(context.campaign_id, context))
  
         # Push live event to WebSocket
         # Import here to avoid circular imports at module level
@@ -118,7 +191,27 @@ def build_crew(context: CampaignContext) -> Crew:
             log=context.agent_states[agent_name].logs[-1]
             if context.agent_states[agent_name].logs else None,
         )
-        asyncio.create_task(event_bus.publish(context.campaign_id, event))
+        _schedule(event_bus.publish(context.campaign_id, event))
+
+        # In sequential mode, immediately move the next agent to RUNNING so
+        # the UI reflects progress even while the next step is in-flight.
+        if step_index < len(_STEP_ORDER):
+            next_agent = _STEP_ORDER[step_index]
+            next_state = context.agent_states.get(next_agent)
+            if next_state and next_state.status == "IDLE":
+                context.set_agent_running(next_agent)
+                context.add_log(next_agent, f"{next_agent} started.", level="INFO")
+
+                _schedule(save_context(context.campaign_id, context))
+
+                next_event = PipelineEvent(
+                    campaign_id=context.campaign_id,
+                    agent_name=next_agent,
+                    status=context.agent_states[next_agent].status,
+                    log=context.agent_states[next_agent].logs[-1]
+                    if context.agent_states[next_agent].logs else None,
+                )
+                _schedule(event_bus.publish(context.campaign_id, next_event))
  
     return Crew(
         agents=[
@@ -187,16 +280,48 @@ async def run_crew(
     try:
         # Mark campaign as running
         context.campaign_status = CampaignStatus.RUNNING
+        context.set_agent_running(AgentName.RESEARCH)
+        context.add_log(AgentName.RESEARCH, f"{AgentName.RESEARCH} started.", level="INFO")
         await save_context(campaign_id, context)
+
+        from core.event_bus import event_bus
+        from models.agent_run import PipelineEvent
+
+        await event_bus.publish(
+            campaign_id,
+            PipelineEvent(
+                campaign_id=campaign_id,
+                agent_name=AgentName.RESEARCH,
+                status=context.agent_states[AgentName.RESEARCH].status,
+                log=context.agent_states[AgentName.RESEARCH].logs[-1],
+            ),
+        )
  
         # Build the crew and kick it off
         # inputs dict is available to tasks via {variable_name} placeholders
-        crew = build_crew(context)
-        crew.kickoff(inputs={
-            "business_description": business_description,
-            "monthly_budget":       monthly_budget,
-            "geo_targets":          str(geo_targets),
-        })
+        loop = asyncio.get_running_loop()
+        crew = build_crew(context, loop)
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(
+                    crew.kickoff,
+                    inputs={
+                        "business_description": business_description,
+                        "monthly_budget":       monthly_budget,
+                        "geo_targets":          str(geo_targets),
+                    },
+                ),
+                timeout=600,
+            )
+        except TimeoutError as exc:
+            raise RuntimeError(
+                "Pipeline exceeded 10 minutes while executing an agent step. "
+                "Check Ollama responsiveness and external tool latency."
+            ) from exc
+        except concurrent.futures.TimeoutError as exc:
+            raise RuntimeError(
+                "Pipeline worker thread timed out while executing Crew kickoff."
+            ) from exc
  
         # All agents completed — mark as done
         context.campaign_status = CampaignStatus.DONE
@@ -208,5 +333,10 @@ async def run_crew(
         context.add_log("pipeline", f"Pipeline failed: {str(e)}", level="ERROR")
         await save_context(campaign_id, context)
         raise
+
+    finally:
+        # Always signal WebSocket listeners that this run reached a terminal state.
+        from core.event_bus import event_bus
+        await event_bus.publish_done(campaign_id)
  
     return context

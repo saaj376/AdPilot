@@ -38,11 +38,21 @@ async def campaign_live_stream(websocket: WebSocket, campaign_id: str):
     """
     await websocket.accept()
 
+    async def _safe_send(payload: dict) -> bool:
+        """Send payload, returning False if client disconnected mid-send."""
+        try:
+            await websocket.send_text(json.dumps(payload))
+            return True
+        except (WebSocketDisconnect, RuntimeError):
+            return False
+
+    queue = None
+
     # Send current state immediately so the client gets the full picture
     # even if it connects after some agents have already finished
     context = await load_context(campaign_id)
     if context:
-        await websocket.send_text(json.dumps({
+        sent = await _safe_send({
             "type":          "catch_up",
             "campaign_id":   campaign_id,
             "campaign_status": context.campaign_status,
@@ -58,7 +68,9 @@ async def campaign_live_stream(websocket: WebSocket, campaign_id: str):
                 }
                 for name, state in context.agent_states.items()
             },
-        }))
+        })
+        if not sent:
+            return
 
     # Subscribe to live events for this campaign
     queue = event_bus.subscribe(campaign_id)
@@ -70,14 +82,16 @@ async def campaign_live_stream(websocket: WebSocket, campaign_id: str):
 
             # None is the sentinel value meaning the pipeline is done
             if event is None:
-                await websocket.send_text(json.dumps({
+                sent = await _safe_send({
                     "type":        "pipeline_done",
                     "campaign_id": campaign_id,
-                }))
+                })
+                if not sent:
+                    break
                 break
 
             # Send the event as JSON to the browser
-            await websocket.send_text(json.dumps({
+            sent = await _safe_send({
                 "type":        "agent_update",
                 "campaign_id": event.campaign_id,
                 "agent_name":  event.agent_name,
@@ -88,7 +102,9 @@ async def campaign_live_stream(websocket: WebSocket, campaign_id: str):
                     "timestamp": str(event.log.timestamp),
                 } if event.log else None,
                 "timestamp":   str(event.timestamp),
-            }))
+            })
+            if not sent:
+                break
 
     except WebSocketDisconnect:
         # Client closed the tab or navigated away — clean up silently
@@ -96,5 +112,9 @@ async def campaign_live_stream(websocket: WebSocket, campaign_id: str):
 
     finally:
         # Always unsubscribe when done — prevents memory leaks
-        event_bus.unsubscribe(campaign_id, queue)
-        await websocket.close()
+        if queue is not None:
+            event_bus.unsubscribe(campaign_id, queue)
+        try:
+            await websocket.close()
+        except (WebSocketDisconnect, RuntimeError):
+            pass

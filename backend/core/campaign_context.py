@@ -77,6 +77,11 @@ class CampaignContext(BaseModel):
  
     def add_log(self, agent_name: str, message: str, level: str = "INFO"):
         from models.agent_run import AgentLog, LogLevel
+
+        if agent_name not in self.agent_states:
+            # Allow system-level channels (for example "pipeline") without crashing.
+            self.agent_states[agent_name] = AgentRunState(agent_name=agent_name)
+
         log = AgentLog(
             agent_name=agent_name,
             message=message,

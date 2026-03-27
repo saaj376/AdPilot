@@ -43,6 +43,11 @@ class BaseAgent:
     # Shared LLM instance — all agents use the same Ollama gemma3:4b
     _llm = None
 
+    @staticmethod
+    def _escape_braces_for_format(text: str) -> str:
+        """Escape literal braces so CrewAI string interpolation does not treat JSON blocks as format fields."""
+        return text.replace("{", "{{").replace("}", "}}")
+
     @classmethod
     def _get_llm(cls):
         # Create the LLM once and reuse it across all agents
@@ -71,10 +76,12 @@ class BaseAgent:
         Returns:
             A fully configured CrewAI Agent ready to be added to the Crew.
         """
+        safe_backstory = cls._escape_braces_for_format(backstory)
+
         return Agent(
             role=role,
             goal=goal,
-            backstory=backstory,
+            backstory=safe_backstory,
             tools=tools or [],
             llm=cls._get_llm(),
 

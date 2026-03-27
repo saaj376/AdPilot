@@ -10,6 +10,7 @@ def get_llm() -> LLM:
     return LLM(
         model=f"ollama/{settings.OLLAMA_MODEL}",
         base_url=settings.OLLAMA_BASE_URL,
+        timeout=120,
     )
 
 async def check_ollama_health() -> None:
