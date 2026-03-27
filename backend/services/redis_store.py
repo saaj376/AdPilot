@@ -1,5 +1,7 @@
 import json
 import redis.asyncio as aioredis
+from pydantic import ValidationError
+
 from config import settings
 from core.campaign_context import CampaignContext
 
@@ -55,7 +57,26 @@ async def load_context(campaign_id: str) -> CampaignContext | None:
     raw = await client.get(_context_key(campaign_id))
     if raw is None:
         return None
-    return CampaignContext.model_validate_json(raw)
+
+    try:
+        return CampaignContext.model_validate_json(raw)
+    except ValidationError:
+        # Backward-compat recovery for records saved before output normalization.
+        payload = json.loads(raw)
+        weekly = payload.get("weekly_report")
+        if isinstance(weekly, dict):
+            week_summary = weekly.get("week_summary")
+            if isinstance(week_summary, str) and week_summary.strip():
+                payload["weekly_report"] = week_summary
+            else:
+                raw_value = weekly.get("raw")
+                payload["weekly_report"] = raw_value if isinstance(raw_value, str) else json.dumps(weekly)
+
+        context = CampaignContext.model_validate(payload)
+
+        # Persist repaired shape so future reads are clean and fast.
+        await save_context(campaign_id, context)
+        return context
  
  
 async def delete_context(campaign_id: str) -> None:

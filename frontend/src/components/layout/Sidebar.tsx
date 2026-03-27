@@ -1,0 +1,41 @@
+import { NavLink } from 'react-router-dom'
+
+const navItems = [
+	{ to: '/', label: 'Home' },
+	{ to: '/campaigns/new', label: 'New Campaign' },
+	{ to: '/reports', label: 'Reports' },
+]
+
+export function Sidebar() {
+	return (
+		<aside className="sidebar-shell">
+			<div className="brand-box">
+				<span className="brand-mark">AD</span>
+				<div>
+					<h1>Albus AI</h1>
+					<p>Campaign Control</p>
+				</div>
+			</div>
+
+			<nav className="sidebar-nav">
+				{navItems.map((item) => (
+					<NavLink
+						key={item.to}
+						to={item.to}
+						className={({ isActive }) =>
+							isActive ? 'sidebar-link sidebar-link-active' : 'sidebar-link'
+						}
+					>
+						{item.label}
+					</NavLink>
+				))}
+			</nav>
+
+			<footer className="sidebar-footer">
+				<strong>Albus Dumbledore</strong>
+				<span>Headmaster Office</span>
+			</footer>
+		</aside>
+	)
+}
+
