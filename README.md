@@ -1,4 +1,4 @@
-# 🤖 Albus Dumbledore — Multi-Agent Autonomous Campaign Lifecycle Manager
+# 🤖 AdPilot — Multi-Agent Autonomous Campaign Lifecycle Manager
 
 > A proof-of-concept for how agentic AI could eliminate SMB advertiser churn on Google Ads.
 
@@ -113,8 +113,8 @@ Agents operate in a **sequential pipeline with shared state**. Each agent writes
 ### Installation
 
 ```bash
-git clone https://github.com/your-org/albus-dumbledore.git
-cd albus-dumbledore
+git clone https://github.com/your-org/adpilot.git
+cd adpilot
 pip install -r requirements.txt
 cp .env.example .env  # Add your API keys
 ```
@@ -130,7 +130,7 @@ python main.py --business "A family-owned Italian restaurant in Austin, TX speci
 ## 📁 Project Structure
 
 ```
-albus-dumbledore/
+adpilot/
 ├── agents/
 │   ├── research_agent.py
 │   ├── keyword_agent.py

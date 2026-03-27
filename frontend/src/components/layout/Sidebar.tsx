@@ -12,7 +12,7 @@ export function Sidebar() {
 			<div className="brand-box">
 				<span className="brand-mark">AD</span>
 				<div>
-					<h1>Albus AI</h1>
+					<h1>AdPilot AI</h1>
 					<p>Campaign Control</p>
 				</div>
 			</div>
@@ -32,8 +32,8 @@ export function Sidebar() {
 			</nav>
 
 			<footer className="sidebar-footer">
-				<strong>Albus Dumbledore</strong>
-				<span>Headmaster Office</span>
+				<strong>AdPilot Core</strong>
+				<span>Command Center</span>
 			</footer>
 		</aside>
 	)

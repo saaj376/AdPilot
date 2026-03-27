@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     # Must be ADC credentials JSON (service account or authorized_user),
     # not an OAuth client_secret JSON downloaded from API credentials page.
     GOOGLE_APPLICATION_CREDENTIALS: str = ""   # /absolute/path/to/adc_credentials.json
-    GOOGLE_PROJECT_ID: str = ""                # e.g. albus-490718
+    GOOGLE_PROJECT_ID: str = ""                # e.g. adpilot-490718
 
     # ─── CORS ─────────────────────────────────────────────────────────────────
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]  # Vite dev server
