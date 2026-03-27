@@ -40,7 +40,7 @@ def _extract_text(html: str, max_chars: int = 3000) -> str:
     return text[:max_chars]
 
 
-@tool("Scrape website")
+@tool("scrape_website")
 def scrape_website(url: str) -> str:
     """Fetch a URL and return cleaned visible page text for research context."""
     try:
@@ -57,7 +57,7 @@ def scrape_website(url: str) -> str:
         return f"Could not scrape {url} — {str(e)}"
 
 
-@tool("Search and scrape competitors")
+@tool("search_competitors")
 def search_competitors(business_type: str, location: str) -> list[dict]:
     """
     Finds the top competitors for a business type in a location

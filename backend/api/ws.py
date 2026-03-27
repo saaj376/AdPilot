@@ -61,6 +61,7 @@ async def campaign_live_stream(websocket: WebSocket, campaign_id: str):
                     "status":     state.status,
                     "started_at": str(state.started_at) if state.started_at else None,
                     "finished_at": str(state.finished_at) if state.finished_at else None,
+                    "output":     state.output,
                     "logs": [
                         {"message": log.message, "level": log.level, "timestamp": str(log.timestamp)}
                         for log in state.logs
@@ -96,6 +97,7 @@ async def campaign_live_stream(websocket: WebSocket, campaign_id: str):
                 "campaign_id": event.campaign_id,
                 "agent_name":  event.agent_name,
                 "status":      event.status,
+                "output":      event.output,
                 "log": {
                     "message":   event.log.message,
                     "level":     event.log.level,

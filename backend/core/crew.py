@@ -41,14 +41,147 @@ def _parse_agent_output(raw_output) -> dict:
     """
     import json
     import re
- 
-    try:
-        text = raw_output.raw if hasattr(raw_output, "raw") else str(raw_output)
-        text = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
- 
-        return json.loads(text)
-    except Exception:
-        return {"raw": str(raw_output)}
+
+    def _extract_json_from_text(value: str) -> dict | None:
+        # Prefer explicit "Final Answer:" payload if present.
+        marker_match = re.search(r"final answer\s*:\s*(.*)$", value, flags=re.IGNORECASE | re.DOTALL)
+        candidates = [marker_match.group(1)] if marker_match else []
+        candidates.append(value)
+
+        for candidate in candidates:
+            # Try fenced JSON blocks first.
+            fence_blocks = re.findall(r"```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```", candidate, flags=re.DOTALL)
+            for block in fence_blocks:
+                try:
+                    parsed = json.loads(block)
+                    if isinstance(parsed, dict):
+                        return parsed
+                    return {"data": parsed}
+                except Exception:
+                    continue
+
+            # Try to parse the last balanced JSON object from plain text.
+            starts = [i for i, ch in enumerate(candidate) if ch == "{"]
+            for start in reversed(starts):
+                depth = 0
+                for idx in range(start, len(candidate)):
+                    ch = candidate[idx]
+                    if ch == "{":
+                        depth += 1
+                    elif ch == "}":
+                        depth -= 1
+                        if depth == 0:
+                            snippet = candidate[start : idx + 1]
+                            try:
+                                parsed = json.loads(snippet)
+                                if isinstance(parsed, dict):
+                                    return parsed
+                                return {"data": parsed}
+                            except Exception:
+                                break
+
+            # Fallback: list payloads.
+            starts_list = [i for i, ch in enumerate(candidate) if ch == "["]
+            for start in reversed(starts_list):
+                depth = 0
+                for idx in range(start, len(candidate)):
+                    ch = candidate[idx]
+                    if ch == "[":
+                        depth += 1
+                    elif ch == "]":
+                        depth -= 1
+                        if depth == 0:
+                            snippet = candidate[start : idx + 1]
+                            try:
+                                parsed = json.loads(snippet)
+                                return {"data": parsed}
+                            except Exception:
+                                break
+
+        return None
+
+    def _try_parse_text(value: str) -> dict | None:
+        """Attempt to parse valid JSON from a string, with multiple fallbacks."""
+        cleaned = re.sub(r"```(?:json)?\s*", "", value).strip().rstrip("`").strip()
+        if not cleaned:
+            return None
+
+        # 1. Try extracting JSON from common patterns
+        extracted = _extract_json_from_text(cleaned)
+        if extracted is not None:
+            return extracted
+
+        # 2. Try parsing the whole thing as literal JSON
+        try:
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, dict):
+                return parsed
+            return {"data": parsed}
+        except Exception:
+            pass
+
+        # 3. Final fallback: if it looks like a list or dict but failed above,
+        # it might have trailing garbage. Try one last time with a loose match.
+        if cleaned.startswith("{") or cleaned.startswith("["):
+             # This is a bit redundant with _extract_json_from_text but serves as a safety net
+             try:
+                 # Very basic attempt to find middle ground
+                 return _extract_json_from_text(cleaned + "}") or _extract_json_from_text(cleaned + "]")
+             except:
+                 pass
+
+        return None
+
+    def _from_candidate(candidate) -> dict | None:
+        if candidate is None:
+            return None
+
+        if isinstance(candidate, dict):
+            return candidate
+
+        if isinstance(candidate, str):
+            parsed = _try_parse_text(candidate)
+            return parsed if parsed is not None else {"raw": candidate}
+
+        json_dict = getattr(candidate, "json_dict", None)
+        if isinstance(json_dict, dict) and json_dict:
+            return json_dict
+
+        pydantic_obj = getattr(candidate, "pydantic", None)
+        if hasattr(pydantic_obj, "model_dump"):
+            return pydantic_obj.model_dump()
+
+        raw_text = getattr(candidate, "raw", None)
+        if isinstance(raw_text, str):
+            parsed = _try_parse_text(raw_text)
+            return parsed if parsed is not None else {"raw": raw_text}
+
+        output_text = getattr(candidate, "output", None)
+        if isinstance(output_text, str):
+            parsed = _try_parse_text(output_text)
+            return parsed if parsed is not None else {"raw": output_text}
+
+        return None
+
+    candidates = [
+        raw_output,
+        getattr(raw_output, "output", None),
+        getattr(raw_output, "task_output", None),
+        getattr(raw_output, "result", None),
+        getattr(raw_output, "raw_output", None),
+    ]
+
+    for candidate in candidates:
+        parsed = _from_candidate(candidate)
+        if parsed is not None:
+            return parsed
+
+    # Bug 5 fix: Instead of a flat "raw" key, provide a "summary" key
+    # which the frontend heuristics (regex) are more likely to pick up.
+    return {
+        "summary": str(raw_output),
+        "raw": str(raw_output)
+    }
 
 _ROLE_TO_AGENT_NAME = {
     "Business Research Specialist":          AgentName.RESEARCH,
@@ -105,6 +238,11 @@ def _resolve_agent_name(step_output, fallback_index: int) -> str:
         if candidate in _ROLE_TO_AGENT_NAME:
             return _ROLE_TO_AGENT_NAME[candidate]
 
+        normalized = candidate.strip().lower()
+        for role, agent_name in _ROLE_TO_AGENT_NAME.items():
+            if role.lower() in normalized:
+                return agent_name
+
     # Final fallback: trust sequential task order for Process.sequential.
     if 0 <= fallback_index < len(_STEP_ORDER):
         return _STEP_ORDER[fallback_index]
@@ -140,33 +278,45 @@ def build_crew(context: CampaignContext, event_loop: asyncio.AbstractEventLoop) 
     # step_callback fires after each task completes
     # We use it to update context, save to Redis, and push WebSocket events
     def _schedule(coro: Coroutine) -> None:
-        """Schedule coroutine from either event-loop or worker-thread callbacks."""
+        """Schedule coroutine from either event-loop or worker-thread callbacks.
+
+        asyncio.ensure_future is the thread-safe way to schedule a coroutine.
+        create_task inside call_soon_threadsafe is NOT safe — the lambda runs
+        on the event-loop thread but create_task can still misbehave depending
+        on the Python version, silently dropping WebSocket publish calls.
+        """
         try:
             running_loop = asyncio.get_running_loop()
         except RuntimeError:
             running_loop = None
 
         if running_loop is event_loop:
-            asyncio.create_task(coro)
+            asyncio.ensure_future(coro, loop=event_loop)
             return
 
-        event_loop.call_soon_threadsafe(lambda: asyncio.create_task(coro))
+        event_loop.call_soon_threadsafe(asyncio.ensure_future, coro)
 
     step_index = 0
 
     def on_step(step_output):
         nonlocal step_index
         agent_name = _resolve_agent_name(step_output, step_index)
-        step_index += 1
  
         if not agent_name:
             return
+
+        previous_status = str(context.agent_states[agent_name].status)
+        agent_order_index = _STEP_ORDER.index(agent_name) if agent_name in _STEP_ORDER else -1
 
         output = _parse_agent_output(step_output)
         field = _AGENT_OUTPUT_FIELD.get(agent_name)
         if field and hasattr(context, field):
             setattr(context, field, _normalize_field_value(field, output))
         context.set_agent_done(agent_name, output=output)
+
+        just_completed = previous_status != "DONE"
+        if just_completed and agent_order_index >= 0 and agent_order_index >= step_index:
+            step_index = agent_order_index + 1
  
         # Log a completion message
         context.add_log(
@@ -188,6 +338,7 @@ def build_crew(context: CampaignContext, event_loop: asyncio.AbstractEventLoop) 
             campaign_id=context.campaign_id,
             agent_name=agent_name,
             status=context.agent_states[agent_name].status,
+            output=context.agent_states[agent_name].output,
             log=context.agent_states[agent_name].logs[-1]
             if context.agent_states[agent_name].logs else None,
         )
@@ -195,7 +346,7 @@ def build_crew(context: CampaignContext, event_loop: asyncio.AbstractEventLoop) 
 
         # In sequential mode, immediately move the next agent to RUNNING so
         # the UI reflects progress even while the next step is in-flight.
-        if step_index < len(_STEP_ORDER):
+        if just_completed and step_index < len(_STEP_ORDER):
             next_agent = _STEP_ORDER[step_index]
             next_state = context.agent_states.get(next_agent)
             if next_state and next_state.status == "IDLE":
@@ -208,6 +359,7 @@ def build_crew(context: CampaignContext, event_loop: asyncio.AbstractEventLoop) 
                     campaign_id=context.campaign_id,
                     agent_name=next_agent,
                     status=context.agent_states[next_agent].status,
+                    output=context.agent_states[next_agent].output,
                     log=context.agent_states[next_agent].logs[-1]
                     if context.agent_states[next_agent].logs else None,
                 )
@@ -293,6 +445,7 @@ async def run_crew(
                 campaign_id=campaign_id,
                 agent_name=AgentName.RESEARCH,
                 status=context.agent_states[AgentName.RESEARCH].status,
+                output=context.agent_states[AgentName.RESEARCH].output,
                 log=context.agent_states[AgentName.RESEARCH].logs[-1],
             ),
         )

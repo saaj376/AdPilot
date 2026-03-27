@@ -9,6 +9,10 @@ creative_agent=BaseAgent.build(
     ),
     backstory=load_prompt("creative.txt"),
     tools=[],
+    # Pure LLM agent — no tools. Disabling the ReAct system prompt so the LLM
+    # can write Final Answer directly without hitting the Action/Observation
+    # format parser and triggering unnecessary retry loops.
+    use_system_prompt=False,
 )
 # CreativeAgent writes the actual ad copy —
 # headlines, descriptions and CTAs for every ad group.
