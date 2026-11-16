@@ -6,8 +6,8 @@ qa_agent = BaseAgent.build(
     goal=(
         "Review every headline and description against Google Ads editorial policies. "
         "Flag automatic failures and fix them. "
-        "Note warnings but do not block launch for warnings alone. "
-        "Return the corrected copy in fixed_copy so LaunchAgent can use it directly."
+        "Note warnings but do not block approval for warnings alone. "
+        "Return the corrected copy in fixed_copy so the campaign planner can use it directly."
     ),
 
     backstory=load_prompt("qa_policy.txt"),
@@ -24,7 +24,7 @@ qa_agent = BaseAgent.build(
 # Google Ads editorial policies.
 #
 # If it finds issues it fixes them automatically and returns
-# the corrected copy in fixed_copy — LaunchAgent uses the
+# the corrected copy in fixed_copy — the campaign planner uses the
 # fixed version, not the original.
 #
 # Input it reads from previous agents:

@@ -17,6 +17,7 @@ export interface CampaignContext {
 	keyword_strategy: Record<string, unknown>
 	ad_creatives: Record<string, unknown>
 	qa_result: Record<string, unknown>
+	launch_package?: Record<string, unknown>
 	campaign_ids: Record<string, unknown>
 	performance_data: Record<string, unknown>
 	optimizations: Record<string, unknown>

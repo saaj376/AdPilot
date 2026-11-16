@@ -818,3 +818,10 @@ a {
   .top-nav { flex-wrap: wrap; }
   .campaign-form { padding: 1rem; min-width: 0; }
 }
+
+/* Long campaign IDs and agent payloads must fit within narrow detail layouts. */
+.top-nav > div, .detail-grid > div, .agent-output-shell, .live-output-shell { min-width: 0; }
+.top-nav h2 { overflow-wrap: anywhere; }
+.pipeline-item { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.pipeline-name { overflow-wrap: anywhere; }
+.agent-output-body pre { max-width: 100%; overflow-x: auto; }

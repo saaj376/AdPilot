@@ -75,8 +75,8 @@ _ROLE_TO_AGENT_NAME = {
     "Google Ads Copywriter":                 AgentName.CREATIVE,
     "Google Ads Policy Compliance Reviewer": AgentName.QA,
     "Google Ads Campaign Launch Specialist": AgentName.LAUNCH,
-    "Campaign Performance Analyst":          AgentName.MONITOR,
-    "Google Ads Bid and Budget Optimizer":   AgentName.OPTIMIZE,
+    "Campaign Performance Analyst": AgentName.MONITOR,
+    "Google Ads Bid and Budget Optimizer": AgentName.OPTIMIZE,
     "Campaign Reporting Analyst":            AgentName.REPORT,
 }
 
@@ -85,9 +85,9 @@ _AGENT_OUTPUT_FIELD = {
     AgentName.KEYWORD:   "keyword_strategy",
     AgentName.CREATIVE:  "ad_creatives",
     AgentName.QA:        "qa_result",
-    AgentName.LAUNCH:    "campaign_ids",
-    AgentName.MONITOR:   "performance_data",
-    AgentName.OPTIMIZE:  "optimizations",
+    AgentName.LAUNCH: "launch_package",
+    AgentName.MONITOR: "performance_data",
+    AgentName.OPTIMIZE: "optimizations",
     AgentName.REPORT:    "weekly_report",
 }
 
@@ -184,9 +184,15 @@ def build_crew(context: CampaignContext, event_loop: asyncio.AbstractEventLoop) 
         if output.get("error"):
             raise ValueError(f"{agent_name}: {output['error']}")
         if agent_name == AgentName.QA and output.get("overall_approved") is not True:
-            raise ValueError("Policy review did not approve the campaign; launch stopped")
-        if agent_name == AgentName.LAUNCH and not output.get("campaign_id"):
-            raise ValueError("Launch returned no campaign ID")
+            raise ValueError("Policy review did not approve the campaign; plan stopped")
+        if agent_name == AgentName.LAUNCH and output.get("published") is not False:
+            raise ValueError("Launch package must explicitly declare published=false")
+        if agent_name == AgentName.MONITOR and (
+            output.get("data_available") is not False or output.get("metrics", "missing") is not None
+        ):
+            raise ValueError("No performance data was supplied; metrics must be unavailable")
+        if agent_name == AgentName.OPTIMIZE and output.get("applied") is not False:
+            raise ValueError("Optimization recommendations must explicitly declare applied=false")
         field = _AGENT_OUTPUT_FIELD.get(agent_name)
         if field and hasattr(context, field):
             setattr(context, field, _normalize_field_value(field, output))
@@ -284,7 +290,7 @@ async def run_crew(
 ) -> CampaignContext:
     """
     Main entry point called by POST /campaigns API endpoint.
-    Runs the full 8-agent pipeline for a new campaign.
+    Runs the eight-agent pipeline for a new campaign.
  
     1. Creates a fresh CampaignContext
     2. Saves it to Redis immediately (so /status endpoint works right away)
@@ -300,7 +306,7 @@ async def run_crew(
         geo_targets:          list of location strings
  
     Returns:
-        The fully populated CampaignContext after all 8 agents complete.
+        The fully populated CampaignContext after all eight agents complete.
     """
     # Create a fresh context for this campaign
     context = CampaignContext(

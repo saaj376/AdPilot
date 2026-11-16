@@ -64,14 +64,14 @@ async def test_task_callback_isolated_and_persisted(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_qa_rejection_stops_launch(monkeypatch):
+async def test_qa_rejection_stops_plan(monkeypatch):
     value = context()
     value.set_agent_running(AgentName.QA)
     crew = pipeline.build_crew(value, asyncio.get_running_loop())
-    with pytest.raises(ValueError, match="launch stopped"):
+    with pytest.raises(ValueError, match="plan stopped"):
         await asyncio.to_thread(crew.task_callback, SimpleNamespace(
             agent="Google Ads Policy Compliance Reviewer", raw='{"overall_approved":false}'))
-    assert value.agent_states[AgentName.LAUNCH].status == "IDLE"
+    assert value.agent_states[AgentName.REPORT].status == "IDLE"
 
 
 @pytest.mark.asyncio
@@ -111,16 +111,16 @@ def test_late_websocket_gets_terminal_status(monkeypatch, status):
 
 
 @pytest.mark.asyncio
-async def test_all_eight_tasks_complete_through_real_crew(monkeypatch):
+async def test_all_eight_planning_tasks_complete_through_real_crew(monkeypatch):
     import json
     from crewai import Agent
 
     outputs = [
         {"business_name": "Bakery"}, {"ad_groups": {"Bread": []}},
         {"ad_groups": {"Bread": {"headlines": ["Bread"]}}},
-        {"overall_approved": True}, {"campaign_id": "123"},
-        {"impressions": 0, "clicks": 0, "spend": 0},
-        {"summary": "No data yet"}, {"week_summary": "Campaign is paused; no traffic yet."},
+        {"overall_approved": True}, {"published": False, "ad_groups": {}},
+        {"data_available": False, "metrics": None}, {"applied": False, "experiments": []},
+        {"week_summary": "Campaign plan ready for review."},
     ]
     by_role = dict(zip(pipeline._ROLE_TO_AGENT_NAME, outputs))
     calls = []
@@ -137,5 +137,21 @@ async def test_all_eight_tasks_complete_through_real_crew(monkeypatch):
     assert result.campaign_status == "DONE"
     assert result.is_complete()
     assert len(calls) == 8
-    assert result.weekly_report == "Campaign is paused; no traffic yet."
+    assert result.weekly_report == "Campaign plan ready for review."
     assert snapshots[-1]["campaign_status"] == "DONE"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('role,output,message', [
+    ('Google Ads Campaign Launch Specialist', {'published': True}, 'published=false'),
+    ('Campaign Performance Analyst', {'data_available': True, 'metrics': {'clicks': 10}}, 'unavailable'),
+    ('Google Ads Bid and Budget Optimizer', {'applied': True}, 'applied=false'),
+])
+async def test_planning_agents_reject_claims_of_live_actions(role, output, message):
+    import json
+    value = context()
+    crew = pipeline.build_crew(value, asyncio.get_running_loop())
+    with pytest.raises(ValueError, match=message):
+        await asyncio.to_thread(crew.task_callback, SimpleNamespace(agent=role, raw=json.dumps(output)))
+    for agent in crew.agents[4:7]:
+        assert agent.tools == []

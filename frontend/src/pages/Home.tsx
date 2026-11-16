@@ -90,7 +90,7 @@ export function HomePage() {
 		const activeCampaigns = campaigns.filter((campaign) =>
 			['PENDING', 'RUNNING', 'LAUNCHED'].includes(campaign.status),
 		).length
-		const totalSpend = campaigns.reduce((sum, campaign) => sum + campaign.totalSpend, 0)
+		const totalSpend = campaigns.reduce((sum, campaign) => sum + campaign.monthlyBudget, 0)
 
 		return { totalCampaigns, activeCampaigns, totalSpend }
 	}, [campaigns])
@@ -98,8 +98,8 @@ export function HomePage() {
 	return (
 		<div className="page-shell">
 			<TopNav
-				title="Campaign List Dashboard"
-				subtitle="All campaigns at a glance"
+				title="Campaign Plans"
+				subtitle="Research-backed plans ready for review and export"
 				actions={
 					<Link to="/campaigns/new" className="primary-btn">
 						New Campaign
@@ -117,7 +117,7 @@ export function HomePage() {
 					<strong>{quickStats.activeCampaigns}</strong>
 				</article>
 				<article className="stat-card">
-					<h4>Total Spend</h4>
+					<h4>Planned Monthly Budget</h4>
 					<strong>{formatCurrency(quickStats.totalSpend)}</strong>
 				</article>
 			</section>

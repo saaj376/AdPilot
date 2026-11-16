@@ -6,7 +6,6 @@ import pytest
 from crewai import Crew, Process, Task
 
 from agents.monitor_agent import monitor_agent
-from services.google_ads_client import get_client
 from tools.google_ads_mcp_reader import mcp_reader
 from tools.scraper_tools import scrape_website, search_competitors
 
@@ -14,19 +13,6 @@ from tools.scraper_tools import scrape_website, search_competitors
 def _require_real_flag() -> None:
     if os.getenv("RUN_REAL_EXTERNAL_TESTS") != "1":
         pytest.skip("Set RUN_REAL_EXTERNAL_TESTS=1 to run real external service tests.")
-
-
-def _require_sdk_env() -> None:
-    required = [
-        "GOOGLE_ADS_DEVELOPER_TOKEN",
-        "GOOGLE_ADS_CLIENT_ID",
-        "GOOGLE_ADS_CLIENT_SECRET",
-        "GOOGLE_ADS_REFRESH_TOKEN",
-        "GOOGLE_ADS_CUSTOMER_ID",
-    ]
-    missing = [key for key in required if not os.getenv(key)]
-    if missing:
-        pytest.skip(f"Missing SDK env vars: {', '.join(missing)}")
 
 
 def _require_mcp_env() -> None:
@@ -57,21 +43,6 @@ def test_real_scraping_tools_output():
 
     assert isinstance(page_text, str)
     assert isinstance(competitors, list)
-
-
-def test_real_google_ads_sdk_accessible_customers():
-    _require_real_flag()
-    _require_sdk_env()
-
-    client = get_client()
-    customer_service = client.get_service("CustomerService")
-    response = customer_service.list_accessible_customers()
-
-    names = list(response.resource_names)
-    print("\n=== Google Ads SDK accessible customers ===")
-    print(json.dumps(names, indent=2))
-
-    assert isinstance(names, list)
 
 
 def test_real_google_ads_mcp_path():

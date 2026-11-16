@@ -4,45 +4,8 @@ import { TopNav } from '../components/layout/TopNav'
 import { getCampaignIds, getReport, isApiError } from '../services/api'
 import type { ReportResponse } from '../types/api'
 
-interface ReportCardData {
-	report: ReportResponse
-	impressions: number
-	clicks: number
-	costPerVisit: number
-	topSearchTerm: string
-}
-
-function asNumber(record: Record<string, unknown>, key: string): number {
-	const value = record[key]
-	return typeof value === 'number' && Number.isFinite(value) ? value : 0
-}
-
-function buildReportCard(report: ReportResponse): ReportCardData {
-	const metrics = report.performance_data
-	const impressions = asNumber(metrics, 'impressions')
-	const clicks = asNumber(metrics, 'clicks')
-	const spend = asNumber(metrics, 'spend') || asNumber(metrics, 'total_spend') || asNumber(metrics, 'cost')
-	const term =
-		(report.optimizations.top_search_term as string | undefined) ||
-		(metrics.top_search_term as string | undefined) ||
-		'Not available yet'
-
-	return {
-		report,
-		impressions,
-		clicks,
-		costPerVisit: clicks > 0 ? spend / clicks : 0,
-		topSearchTerm: term,
-	}
-}
-
-function formatCurrency(value: number): string {
-	return new Intl.NumberFormat('en-US', {
-		style: 'currency',
-		currency: 'USD',
-		maximumFractionDigits: 2,
-	}).format(value)
-}
+interface ReportCardData { report: ReportResponse }
+function buildReportCard(report: ReportResponse): ReportCardData { return { report } }
 
 export function ReportsPage() {
 	const [cards, setCards] = useState<ReportCardData[]>([])
@@ -98,13 +61,13 @@ export function ReportsPage() {
 
 	return (
 		<div className="page-shell">
-			<TopNav title="Weekly Reports" subtitle={`Plain-English summaries for completed campaigns (${pageTotal})`} />
+			<TopNav title="Campaign Plan Summaries" subtitle={`Plain-English summaries for completed plans (${pageTotal})`} />
 
 			{loading ? <p className="empty-state">Loading reports...</p> : null}
 			{error ? <p className="form-error">{error}</p> : null}
 
 			{!loading && !error && cards.length === 0 ? (
-				<p className="empty-state">No completed campaign reports available yet.</p>
+				<p className="empty-state">No completed campaign plans available yet.</p>
 			) : null}
 
 			<section className="reports-list">
@@ -128,13 +91,6 @@ export function ReportsPage() {
 							</div>
 
 							<p>{isExpanded ? card.report.weekly_report : preview}</p>
-
-							<div className="report-metrics">
-								<span>People reached: {card.impressions.toLocaleString('en-US')}</span>
-								<span>Website visits: {card.clicks.toLocaleString('en-US')}</span>
-								<span>Cost per visit: {formatCurrency(card.costPerVisit)}</span>
-								<span>Top search term: {card.topSearchTerm}</span>
-							</div>
 
 							<Link to={`/campaigns/${card.report.campaign_id}`} className="campaign-link">
 								View Campaign

@@ -4,10 +4,8 @@ import { useParams } from 'react-router-dom'
 import { AgentLog } from '../components/agents/AgentLog'
 import { AgentPipeline } from '../components/agents/AgentPipeline'
 import { StatusBadge } from '../components/campaign/StatusBadge'
-import { BudgetGauge } from '../components/charts/BudgetGauge'
-import { PerformanceChart, type PerformancePoint } from '../components/charts/PerformanceChart'
 import { TopNav } from '../components/layout/TopNav'
-import { getCampaign } from '../services/api'
+import { getApiBaseUrl, getCampaign } from '../services/api'
 import { connectCampaignWebSocket } from '../services/websocket'
 import type { AgentRunState, CampaignWsMessage } from '../types/agent'
 import type { CampaignContext } from '../types/campaign'
@@ -28,7 +26,7 @@ const AGENT_FIELD_MAP: Record<string, keyof CampaignContext> = {
 	KeywordAgent: 'keyword_strategy',
 	CreativeAgent: 'ad_creatives',
 	QAAgent: 'qa_result',
-	LaunchAgent: 'campaign_ids',
+	LaunchAgent: 'launch_package',
 	MonitorAgent: 'performance_data',
 	OptimizeAgent: 'optimizations',
 	ReportAgent: 'weekly_report',
@@ -42,42 +40,6 @@ function formatLogLine(agentName: string, timestamp: string, message: string): s
 		second: '2-digit',
 	})
 	return `[${time}] ${agentName}: ${message}`
-}
-
-function toMetric(performanceData: Record<string, unknown>, key: string): number {
-	const value = performanceData[key]
-	return typeof value === 'number' && Number.isFinite(value) ? value : 0
-}
-
-function extractSeries(performanceData: Record<string, unknown>): PerformancePoint[] {
-	const history = performanceData.history
-	if (Array.isArray(history)) {
-		const mapped = history
-			.map((row, index) => {
-				if (!row || typeof row !== 'object') {
-					return null
-				}
-				const safe = row as Record<string, unknown>
-				return {
-					label: typeof safe.label === 'string' ? safe.label : `T${index + 1}`,
-					ctr: typeof safe.ctr === 'number' ? safe.ctr : 0,
-					cpc: typeof safe.cpc === 'number' ? safe.cpc : 0,
-				}
-			})
-			.filter((row): row is PerformancePoint => row !== null)
-
-		if (mapped.length > 0) {
-			return mapped
-		}
-	}
-
-	return [
-		{
-			label: 'Now',
-			ctr: toMetric(performanceData, 'ctr'),
-			cpc: toMetric(performanceData, 'cpc'),
-		},
-	]
 }
 
 function makeDefaultAgentStates(): Record<string, AgentRunState> {
@@ -520,16 +482,6 @@ export function CampaignDetailPage() {
 		}
 	}, [campaignId])
 
-	const performanceData = useMemo(() => campaign?.performance_data ?? {}, [campaign?.performance_data])
-	const chartData = useMemo(() => extractSeries(performanceData), [performanceData])
-	const totalSpend =
-		toMetric(performanceData, 'spend') ||
-		toMetric(performanceData, 'total_spend') ||
-		toMetric(performanceData, 'cost')
-
-	const impressions = toMetric(performanceData, 'impressions')
-	const clicks = toMetric(performanceData, 'clicks')
-	const conversions = toMetric(performanceData, 'conversions')
 
 	const selectedOutputPayload = useMemo(() => {
 		// Always prefer the live agentStates output (updated by WS agent_update messages).
@@ -575,7 +527,7 @@ export function CampaignDetailPage() {
 		<div className="page-shell">
 			<TopNav
 				title={`Campaign Detail: ${campaignId}`}
-				subtitle="Live multi-agent pipeline updates"
+				subtitle="Campaign planning progress"
 				actions={campaign ? <StatusBadge status={campaign.campaign_status} /> : null}
 			/>
 
@@ -610,32 +562,15 @@ export function CampaignDetailPage() {
 				</div>
 
 				<div className="detail-right-col">
-					{campaign ? (
-						<>
-							<BudgetGauge spend={totalSpend} monthlyBudget={campaign.monthly_budget} />
-							<PerformanceChart data={chartData} />
-							<section className="key-metrics">
-								<h4>Key Numbers</h4>
-								<div className="metrics-grid">
-									<article>
-										<span>Impressions</span>
-										<strong>{impressions.toLocaleString('en-US')}</strong>
-									</article>
-									<article>
-										<span>Clicks</span>
-										<strong>{clicks.toLocaleString('en-US')}</strong>
-									</article>
-									<article>
-										<span>Conversions</span>
-										<strong>{conversions.toLocaleString('en-US')}</strong>
-									</article>
-								</div>
-							</section>
-						</>
-					) : (
-						<p className="empty-state">Loading metrics...</p>
-					)}
-				</div>
+                    <section className="research-intro">
+                        <h3>Campaign plan</h3>
+                        <p>Review keywords and ad drafts, then export the plan for use in your advertising platform.</p>
+                        {campaign && <p>Monthly planning budget: ${campaign.monthly_budget.toLocaleString()}</p>}
+                        {campaign?.campaign_status === 'DONE' && <a className="primary-btn"
+                            href={`${getApiBaseUrl()}/campaigns/${campaignId}/export`}>Export campaign plan</a>}
+                        <p>No ads are published and no account changes are made.</p>
+                    </section>
+                </div>
 			</section>
 		</div>
 	)

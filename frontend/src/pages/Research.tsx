@@ -156,7 +156,7 @@ export function ResearchPage() {
         <p className="research-summary">{analysis.summary}</p>
         <div className="research-actions"><button className="primary-btn" onClick={exportBrief}>Export brief JSON</button>
           <Link className="ghost-btn" to="/campaigns/new" state={{ researchBriefId: current.id,
-            businessDescription: `${current.input.product_name}: ${current.input.product_description}. Audience: ${current.input.audience}. Product facts: ${current.input.product_facts.join('; ')}` }}>Prepare a paused campaign</Link></div>
+            businessDescription: `${current.input.product_name}: ${current.input.product_description}. Audience: ${current.input.audience}. Product facts: ${current.input.product_facts.join('; ')}` }}>Prepare campaign plan</Link></div>
         <p className="field-hint">Review all drafts and product claims before use. Video opinions are hypotheses, not proven demand.</p>
         <section className="research-findings">{analysis.findings.map((finding, index) => <article className="report-card" key={index}>
           <p className="field-hint">{finding.category.replaceAll('_', ' ')} · Hypothesis {index + 1}</p>

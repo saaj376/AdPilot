@@ -23,4 +23,4 @@ creative_agent=BaseAgent.build(
 # uses the creative.txt prompt to write Google-policy-compliant copy.
 #
 # Output goes into CampaignContext.ad_creatives
-# and is then reviewed by QAAgent before launch.
+# and is then reviewed by QAAgent before export.

@@ -1,5 +1,5 @@
 from agents.base_agent import BaseAgent
-from tools.google_ads_sdk_tools import get_keyword_ideas
+from tools.keyword_tools import get_keyword_ideas
 
 keyword_agent=BaseAgent.build(
     role="Google Ads Keyword Strategist",
@@ -19,7 +19,7 @@ keyword_agent=BaseAgent.build(
         "so each ad group has tightly related keywords that share the same ad copy. "
         "You always consider the monthly budget when recommending bids "
         "and filter out keywords with very high CPC relative to the budget. "
-        "You return structured JSON so the creative and launch agents "
+        "You return structured JSON so the creative and reporting agents "
         "can use your output directly without interpretation. "
         "Respond only with valid JSON. No markdown, no explanation, no code blocks."
     ),
@@ -37,4 +37,4 @@ keyword_agent=BaseAgent.build(
 #
 # Output goes into CampaignContext.keyword_strategy and is used by:
 #   - CreativeAgent  → to write headlines around the top keywords
-#   - LaunchAgent    → to add keywords to each ad group
+#   - the campaign planner    → to add keywords to each ad group

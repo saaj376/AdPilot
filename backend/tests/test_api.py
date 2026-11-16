@@ -115,3 +115,22 @@ def test_report_returns_payload_when_ready(client, monkeypatch):
 	assert body["campaign_id"] == "abc123"
 	assert body["business_name"] == "Glow Salon"
 	assert body["weekly_report"]
+
+
+def test_export_campaign_plan_never_claims_publication(client, monkeypatch):
+    context = CampaignContext(
+        campaign_id="plan", business_description="A bakery selling bread in Austin",
+        monthly_budget=500, campaign_status=CampaignStatus.DONE,
+    )
+    context.weekly_report = "Test a delivery message against a freshness message."
+    context.keyword_strategy = {"ad_groups": {"Bread": [{"text": "fresh bread"}]}}
+    async def load(_id):
+        return context
+    monkeypatch.setattr(campaigns_api, "load_context", load)
+    response = client.get("/campaigns/plan/export")
+    assert response.status_code == 200
+    assert response.json()["published"] is False
+    assert response.json()["campaign_plan"] == context.weekly_report
+    assert response.json()["keyword_strategy"] == context.keyword_strategy
+    context.campaign_status = CampaignStatus.RUNNING
+    assert client.get("/campaigns/plan/export").status_code == 409

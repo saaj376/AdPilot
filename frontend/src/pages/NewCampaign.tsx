@@ -31,7 +31,7 @@ export function NewCampaignPage() {
 	const [submitting, setSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 
-	const launchCampaign = async (): Promise<void> => {
+	const createPlan = async (): Promise<void> => {
 		setError(null)
 		const description = values.businessDescription.trim()
 		const budget = parseBudget(values.monthlyBudgetText)
@@ -57,7 +57,7 @@ export function NewCampaignPage() {
 			})
 			navigate(`/campaigns/${response.campaign_id}`)
 		} catch {
-			setError('Failed to launch campaign. Please confirm backend is reachable.')
+			setError('Failed to create campaign plan. Please confirm backend is reachable.')
 		} finally {
 			setSubmitting(false)
 		}
@@ -66,17 +66,17 @@ export function NewCampaignPage() {
 	return (
 		<div className="page-shell">
 			<TopNav
-				title="Create New Campaign"
-				subtitle="Fill in business details and launch the full multi-agent pipeline"
+				title="Create Campaign Plan"
+				subtitle="Fill in business details and generate an exportable campaign plan"
 			/>
 
-			{source?.researchBriefId && <p className="research-intro">Your research brief is attached. Its findings will guide keyword and ad themes. Confirm your product facts and add your business website before continuing.</p>}
+			{source?.researchBriefId && <p className="research-intro">Your research brief is attached. Its findings will guide keyword and ad themes. Confirm your product facts and add your business website before generating the plan.</p>}
 			<CampaignForm
 				values={values}
 				submitting={submitting}
 				error={error}
 				onChange={setValues}
-				onSubmit={launchCampaign}
+				onSubmit={createPlan}
 			/>
 		</div>
 	)

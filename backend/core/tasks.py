@@ -13,7 +13,7 @@ from agents.report_agent import report_agent
 # task outputs to pass into this task. This is how data flows between agents.
 #
 # Pipeline order:
-# research → keyword → creative → qa → launch → monitor → optimize → report
+# research → keyword → creative → qa → launch package → monitor → optimize → report
 
 research_task = Task(
     description=(
@@ -94,85 +94,51 @@ qa_task = Task(
 
 launch_task = Task(
     description=(
-        "Create the full campaign structure in Google Ads using the "
-        "approved keyword strategy and ad copy. "
-        "Use the supplied landing page URL for every ad: {landing_page_url}. "
-        "If no URL was supplied, use only a verified business URL from research. "
-        "Never invent a landing page URL. Stop if no valid URL is available. "
-        "Follow this exact order:\n"
-        "1. Call create_campaign with the business name, monthly budget ({monthly_budget}), "
-        "and geo targets ({geo_targets})\n"
-        "2. For each ad group in the keyword strategy, call create_ad_group "
-        "using the campaign_id returned in step 1\n"
-        "3. For each ad group, call add_keywords with all keywords and their match_type and cpc.\n"
-        "4. For each ad group, call create_ads using the ad_group_id from step 2, "
-        "and the approved/fixed headlines and descriptions from the QA task\n"
-        "Use fixed_copy from qa_result if available, otherwise use ad_creatives directly. "
-        "Log all returned IDs."
+        "Assemble the campaign launch package for human review. Use QA fixed_copy, keyword strategy, "
+        "business facts, landing page {landing_page_url}, monthly budget {monthly_budget}, "
+        "and locations {geo_targets}. Include proposed ad groups, keywords, approved ad copy, "
+        "budget allocation and a pre-publication checklist. Set published to false. "
+        "Do not invent external campaign IDs, call advertising services or claim publication."
     ),
-    expected_output=(
-        "A JSON object with: campaign_id, campaign_name, status, "
-        "and ad_groups dict where each key is an ad group name "
-        "and each value has ad_group_id, ad_id, and status."
-    ),
+    expected_output="JSON with published (false), ad_groups, budget_plan, landing_page and checklist.",
     agent=launch_agent,
     context=[research_task, keyword_task, qa_task],
 )
 
 monitor_task = Task(
     description=(
-        "Query the Google Ads API for this week's campaign performance "
-        "using GAQL via the search tool. "
-        "Use the campaign_id from the launch task. "
-        "Run two queries:\n"
-        "1. Campaign-level: impressions, clicks, CTR, average CPC, cost, conversions "
-        "for LAST_7_DAYS\n"
-        "2. Keyword-level: same metrics per keyword, ordered by cost descending\n"
-        "Convert all money values from micros to USD (divide by 1,000,000). "
-        "Identify top 3 keywords by CTR and bottom 3 by CTR."
+        "Assess measurement readiness for this unpublished campaign package. No live advertising "
+        "performance data has been supplied. Set data_available to false and metrics to null. "
+        "Define conversion events, tracking checks, success metrics and an observation window. "
+        "Do not report missing metrics as zero or claim to have queried accounts."
     ),
-    expected_output=(
-        "A JSON object with: impressions, clicks, ctr, avg_cpc, spend, conversions, "
-        "top_keywords (list of 3), low_performers (list of 3), "
-        "and raw_keyword_data (full keyword metrics list)."
-    ),
+    expected_output="JSON with data_available (false), metrics (null), measurement_plan and limitations.",
     agent=monitor_agent,
-    context=[launch_task],
+    context=[research_task, launch_task],
 )
 
 optimize_task = Task(
     description=(
-        "Act on the performance data from the monitor task to improve campaign efficiency.\n"
-        "Rules to follow:\n"
-        "- Pause keywords in low_performers that have CTR below 1% and over 100 impressions\n"
-        "- Increase bids by 15% on top_keywords that have CTR above 5% and at least 1 conversion\n"
-        "- If total spend is below 70% of the weekly budget target, do not change budget\n"
-        "- Log every change with keyword_id, change_type, old_value, and new_value"
+        "Recommend experiments based on customer problems, the proposed campaign, and measurement "
+        "readiness. No live performance data exists: recommend message, keyword and landing-page tests, "
+        "not performance-based bid changes. For each test include hypothesis, variants, rationale, "
+        "success metric and decision criteria. Set applied to false. No account changes are made."
     ),
-    expected_output=(
-        "A JSON object with: paused_keywords (list), bid_adjustments (list), "
-        "budget_change (dict or null), "
-        "and summary (plain English description of all changes made)."
-    ),
+    expected_output="JSON with applied (false), experiments (list), recommendations and summary.",
     agent=optimize_agent,
-    context=[launch_task, monitor_task],
+    context=[research_task, keyword_task, launch_task, monitor_task],
 )
 
 report_task = Task(
     description=(
-        "Write a plain-English weekly performance summary for the business owner. "
-        "Use the business profile, performance data, and optimisations. "
-        "No jargon — translate every metric. "
-        "150 to 250 words. "
-        "Open with the biggest win, explain what was optimised in simple terms, "
-        "end with one clear recommendation for next week."
+        "Write a plain-English campaign plan for human review using the business profile, "
+        "keyword strategy and approved ad drafts. Explain the customer problems addressed, "
+        "supported product facts, landing page improvements and measurable A/B experiments. "
+        "Monthly planning budget: {monthly_budget}. Target locations: {geo_targets}. "
+        "No campaign has been published. Do not invent performance metrics, spend, conversions "
+        "or changes to live accounts. Clearly label predictions as hypotheses."
     ),
-    expected_output=(
-        "A JSON object with: "
-        "week_summary (string — the plain English report) and "
-        "key_numbers (dict with people_reached, website_visits, "
-        "cost_per_visit, total_spend, enquiries, top_search_term)."
-    ),
+    expected_output="A JSON object with week_summary (the campaign plan as a string).",
     agent=report_agent,
-    context=[research_task, monitor_task, optimize_task],
+    context=[research_task, keyword_task, creative_task, qa_task, launch_task, monitor_task, optimize_task],
 )

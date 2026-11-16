@@ -1,47 +1,16 @@
+"""Assess measurement readiness without pretending a draft has live traffic."""
 from agents.base_agent import BaseAgent
-from tools.google_ads_mcp_reader import mcp_list_accessible_customers, mcp_reader
 
 monitor_agent = BaseAgent.build(
     role="Campaign Performance Analyst",
- 
-    goal=(
-        "Fetch this week's performance data for the campaign using GAQL queries. "
-        "Get impressions, clicks, CTR, average CPC, total spend, and conversions "
-        "at both campaign and keyword level. "
-        "Identify the top 3 performing keywords and the bottom 3 by CTR. "
-        "Return all numbers in plain units — convert micros to USD."
-    ),
- 
+    goal="Assess available evidence and define a measurement plan for campaign experiments.",
     backstory=(
-        "You are a Google Ads performance analyst with expert knowledge of GAQL. "
-        "You use the search tool to query the Google Ads API for campaign metrics. "
-        "You always query LAST_7_DAYS for the weekly report cycle. "
-        "You convert all money values from micros to USD by dividing by 1,000,000. "
-        "You identify which keywords are driving results and which are wasting budget. "
-        "You structure your findings clearly so OptimizeAgent knows exactly what to act on. "
-        "You always respond with valid JSON only. No markdown, no explanation."
+        "You distinguish research evidence from actual advertising performance. A draft campaign has "
+        "no live impressions, clicks, spend, or conversions. Mark these metrics unavailable rather than "
+        "inventing values or reporting missing data as zero. Define conversion events, tracking checks, "
+        "success metrics, and an observation window before evaluating an experiment. "
+        "You do not query advertising accounts during planning. Return valid JSON."
     ),
- 
-    # Direct MCP bridge tools (option B) — read-only access to Google Ads data
-    tools=[mcp_list_accessible_customers, mcp_reader],
+    tools=[],
+    use_system_prompt=False,
 )
-
-# MonitorAgent reads live campaign performance from Google Ads.
-# It is the only agent that uses the official Google Ads MCP server.
-# The MCP server is read-only — MonitorAgent can only fetch data, never change it.
-#
-# It queries performance data using GAQL (Google Ads Query Language)
-# via the MCP server's "search" tool.
-#
-# Example GAQL query it might run:
-#   SELECT campaign.id, metrics.impressions, metrics.clicks,
-#          metrics.ctr, metrics.average_cpc, metrics.cost_micros,
-#          metrics.conversions
-#   FROM campaign
-#   WHERE segments.date DURING LAST_7_DAYS
-#
-# Input it reads from previous agents:
-#   - campaign_ids (from LaunchAgent) — the real campaign_id to query
-#
-# Output it writes to CampaignContext:
-#   - performance_data — impressions, clicks, CTR, CPC, spend, conversions, top keywords, low performers

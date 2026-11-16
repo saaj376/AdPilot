@@ -1,4 +1,6 @@
+import json
 from uuid import uuid4
+from fastapi.responses import Response
 from services.video_research import load_brief
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
@@ -130,3 +132,24 @@ async def get_campaign_status(campaign_id: str):
             for name, state in context.agent_states.items()
         },
     }
+
+@router.get("/{campaign_id}/export")
+async def export_campaign(campaign_id: str):
+    context = await load_context(campaign_id)
+    if context is None:
+        raise HTTPException(404, "Campaign plan not found")
+    if context.campaign_status != CampaignStatus.DONE:
+        raise HTTPException(409, "Campaign plan is not ready for export")
+    payload = {
+        "campaign_id": campaign_id, "published": False,
+        "business_description": context.business_description,
+        "landing_page_url": context.landing_page_url,
+        "monthly_budget": context.monthly_budget, "geo_targets": context.geo_targets,
+        "research_brief": context.research_brief, "business_profile": context.business_profile,
+        "keyword_strategy": context.keyword_strategy, "ad_creatives": context.ad_creatives,
+        "qa_result": context.qa_result, "campaign_plan": context.weekly_report,
+        "launch_package": context.launch_package, "measurement_plan": context.performance_data,
+        "optimization_recommendations": context.optimizations,
+    }
+    return Response(json.dumps(payload, indent=2), media_type="application/json",
+                    headers={"Content-Disposition": 'attachment; filename="campaign-plan.json"'})

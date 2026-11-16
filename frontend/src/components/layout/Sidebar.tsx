@@ -3,8 +3,8 @@ import { NavLink } from 'react-router-dom'
 const navItems = [
 	{ to: '/', label: 'Video Research' },
 	{ to: '/campaigns', label: 'Campaigns' },
-	{ to: '/campaigns/new', label: 'New Campaign' },
-	{ to: '/reports', label: 'Reports' },
+	{ to: '/campaigns/new', label: 'New Plan' },
+	{ to: '/reports', label: 'Plan Summaries' },
 ]
 
 export function Sidebar() {

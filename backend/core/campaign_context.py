@@ -40,6 +40,7 @@ class CampaignContext(BaseModel):
     keyword_strategy:       dict            = {}    # KeywordAgent
     ad_creatives:           dict            = {}    # CreativeAgent
     qa_result:              dict            = {}    # QAAgent
+    launch_package:         dict            = {}    # exportable draft; no external IDs
     campaign_ids:           dict            = {}    # LaunchAgent
     performance_data:       dict            = {}    # MonitorAgent
     optimizations:          dict            = {}    # OptimizeAgent
@@ -52,7 +53,7 @@ class CampaignContext(BaseModel):
 #it is a special method that runs automatically right after __init__ completes. 
 #The check says "only initialise if it's empty, i.e. this is a brand new context."
     def model_post_init(self, __context):
-        """Initialise all 8 agent states to IDLE on creation."""
+        """Initialise all eight agent states to IDLE on creation."""
         if not self.agent_states:
             self.agent_states = {
                 name: AgentRunState(agent_name=name)

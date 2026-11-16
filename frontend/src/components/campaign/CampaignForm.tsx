@@ -98,7 +98,7 @@ export function CampaignForm({
 			{error ? <p className="form-error">{error}</p> : null}
 
 			<button type="submit" className="primary-btn" disabled={submitting}>
-				{submitting ? 'Launching...' : 'Launch Campaign'}
+				{submitting ? 'Planning...' : 'Create campaign plan'}
 			</button>
 		</form>
 	)

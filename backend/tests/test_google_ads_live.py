@@ -4,16 +4,13 @@ from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
-from google.api_core.exceptions import MethodNotImplemented
 
 from config import settings
-from services.google_ads_client import check_sdk_credentials, get_client
 from tools.google_ads_mcp_reader import (
     MCP_COMMAND,
     mcp_list_accessible_customers,
     mcp_reader,
 )
-from tools.google_ads_sdk_tools import get_keyword_ideas
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -27,47 +24,6 @@ def load_backend_env():
 def require_live_flag_or_skip():
     if os.getenv("RUN_GOOGLE_ADS_LIVE_TESTS") != "1":
         pytest.skip("Set RUN_GOOGLE_ADS_LIVE_TESTS=1 to run real Google Ads tests.")
-
-
-@pytest.mark.integration
-def test_google_ads_sdk_accessible_customers_live():
-    """Call real Google Ads SDK and print accessible customer resource names."""
-    check_sdk_credentials()
-
-    client = get_client()
-    customer_service = client.get_service("CustomerService")
-    try:
-        response = customer_service.list_accessible_customers()
-    except MethodNotImplemented as exc:
-        pytest.skip(
-            "Google Ads API version configured in the client appears sunset on the server side. "
-            f"Details: {exc}"
-        )
-
-    customers = list(response.resource_names)
-    print("\n=== Google Ads SDK accessible customers ===")
-    print(json.dumps(customers, indent=2))
-
-    assert isinstance(customers, list)
-    assert len(customers) > 0
-
-
-@pytest.mark.integration
-def test_keyword_generation_without_keyword_planner_live():
-    """Validate keyword generation path without calling Keyword Planner endpoint."""
-    keywords = get_keyword_ideas.run(
-        seed_keywords=["pizza delivery", "wood fired pizza"],
-        location="Austin, TX",
-    )
-
-    print("\n=== Heuristic keyword generation sample ===")
-    print(json.dumps(keywords[:10], indent=2))
-
-    assert isinstance(keywords, list)
-    assert len(keywords) > 0
-    if isinstance(keywords[0], dict) and "error" in keywords[0]:
-        pytest.fail(f"Keyword generation returned error: {keywords[0]['error']}")
-    assert "text" in keywords[0]
 
 
 @pytest.mark.integration
