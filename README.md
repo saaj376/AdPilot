@@ -1,5 +1,9 @@
 # AdPilot — Autonomous Google Ads Campaign Lifecycle Manager
 
+AdPilot now starts with **YouTube-informed campaign research for small ecommerce and home-appliance brands**. Provide product facts, an audience, and relevant review/tutorial videos to receive timestamped evidence, customer-problem hypotheses, keyword ideas, ad drafts, landing-page suggestions, and measurable experiments. Review or export the brief without Google Ads credentials; optionally attach it to a paused campaign.
+
+Start with [RUNNING.md](RUNNING.md) for setup and limitations. The original campaign lifecycle architecture below remains available. Recurring automation is not implemented; the launch pipeline performs one run and creates paused campaigns.
+
 AdPilot is a fully autonomous, multi-agent AI system that manages the complete Google Ads campaign lifecycle for small and medium-sized businesses. Starting from a single plain-English business description, it researches the market, builds a keyword strategy, writes ad copy, enforces Google Ads policy compliance, launches a live campaign, monitors performance, optimises bids and budgets, and delivers a plain-English weekly report — all without manual intervention.
 
 ---
@@ -88,7 +92,7 @@ Agent    Agent   Agent   Agent  Agent   Agent   Agent    Agent
                    React Frontend Dashboard
 ```
 
-The pipeline is sequential — agents run one after another in a fixed order. Each agent reads what previous agents wrote into the shared `CampaignContext` object and adds its own output. The context is persisted to Redis after every agent step so that progress is never lost if the server restarts.
+The pipeline is sequential — agents run one after another in a fixed order. Each agent reads what previous agents wrote into the shared `CampaignContext` object and adds its own output. The context is persisted to Redis after every agent step so completed task snapshots remain available after a restart. Interrupted workers are not automatically resumed.
 
 ---
 
@@ -253,7 +257,7 @@ CampaignContext
     └── ReportAgent
 ```
 
-The context is serialised to JSON and stored in Redis after every agent step. If the server restarts mid-pipeline, the context is retrieved from Redis and no work is lost. The Redis TTL is set to 7 days by default.
+The context is serialised to JSON and stored in Redis after every agent step. After a restart, stored snapshots remain readable, but interrupted workers are not automatically resumed. The Redis TTL is set to 7 days by default.
 
 The orchestration logic in `backend/core/crew.py` uses CrewAI's `step_callback` (`on_step`) to intercept each completed task, parse the agent's output, write it to the appropriate field on the context, update the agent's status, and save the context to Redis.
 

@@ -14,6 +14,8 @@ def get_redis() -> aioredis.Redis:
             settings.REDIS_URL,
             encoding="utf-8",
             decode_responses=True,
+            socket_connect_timeout=5,
+            socket_timeout=5,
         )
     return _redis_client
 
@@ -109,7 +111,14 @@ async def get_all_campaign_ids() -> list[str]:
     """
     client = get_redis()
     ids = await client.smembers(_CAMPAIGN_IDS_KEY)
-    return list(ids)
+    ids = sorted(ids)
+    if not ids:
+        return []
+    records = await client.mget([_context_key(campaign_id) for campaign_id in ids])
+    expired = [campaign_id for campaign_id, raw in zip(ids, records) if raw is None]
+    if expired:
+        await client.srem(_CAMPAIGN_IDS_KEY, *expired)
+    return [campaign_id for campaign_id, raw in zip(ids, records) if raw is not None]
  
  
 # ─── Scheduler state ──────────────────────────────────────────────────────────
@@ -136,3 +145,9 @@ async def load_scheduler_state() -> dict:
     if raw is None:
         return {}
     return json.loads(raw)
+
+async def close_redis() -> None:
+    global _redis_client
+    if _redis_client is not None:
+        await _redis_client.aclose()
+        _redis_client = None

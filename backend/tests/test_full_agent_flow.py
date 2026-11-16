@@ -315,6 +315,8 @@ def test_full_8_agent_flow_prints_end_to_end_outputs():
 
     result = crew.kickoff(
         inputs={
+            "landing_page_url": "https://example.com",
+            "video_research": "No video research supplied.",
             "business_description": (
                 "Tony's Wood-Fired Pizza in Austin serves dine-in and delivery, "
                 "with family meal deals and online ordering."

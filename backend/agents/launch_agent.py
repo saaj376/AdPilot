@@ -1,5 +1,5 @@
 from agents.base_agent import BaseAgent
-from tools.google_ads_sdk_tools import create_campaign, create_ad_group, create_ads
+from tools.google_ads_sdk_tools import create_campaign, create_ad_group, create_ads, add_keywords
 
 launch_agent = BaseAgent.build(
     role="Google Ads Campaign Launch Specialist",
@@ -24,7 +24,7 @@ launch_agent = BaseAgent.build(
         "Campaigns start as PAUSED — this is intentional and safe. "
         "You always respond with valid JSON only. No markdown, no explanation."
     ),
-    tools=[create_campaign, create_ad_group, create_ads],
+    tools=[create_campaign, create_ad_group, create_ads, add_keywords],
 )
 
 # LaunchAgent builds the actual campaign structure in Google Ads.

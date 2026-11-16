@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { TopNav } from '../components/layout/TopNav'
 import { CampaignCard } from '../components/campaign/CampaignCard'
-import { getCampaign, getCampaignIds, getCampaignStatus } from '../services/api'
+import { getCampaign, getCampaignIds } from '../services/api'
 import type { CampaignSummary } from '../types/campaign'
 
 function toBusinessName(context: { business_profile: Record<string, unknown>; business_description: string }): string {
@@ -52,11 +52,11 @@ export function HomePage() {
 				const list = await getCampaignIds()
 				const summaries = await Promise.all(
 					list.campaign_ids.map(async (id) => {
-						const [context, status] = await Promise.all([getCampaign(id), getCampaignStatus(id)])
+						const context = await getCampaign(id)
 						return {
 							id,
 							businessName: toBusinessName(context),
-							status: status.campaign_status,
+							status: context.campaign_status,
 							monthlyBudget: context.monthly_budget,
 							createdAt: context.created_at,
 							totalSpend: toSpend(context.performance_data),

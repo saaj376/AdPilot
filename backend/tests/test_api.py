@@ -37,6 +37,13 @@ def test_create_campaign_returns_202(client, monkeypatch, campaign_payload):
 	async def _fake_add_active_campaign(campaign_id: str):
 		called["added"] = bool(campaign_id)
 
+	async def _fake_save_context(campaign_id, context):
+		assert context.campaign_status == CampaignStatus.PENDING
+		assert context.business_description == campaign_payload["business_description"]
+		called["saved"] = True
+
+	monkeypatch.setattr(campaigns_api, "save_context", _fake_save_context)
+
 	async def _fake_run_crew(*args, **kwargs):
 		called["run"] = True
 		return None
@@ -52,6 +59,7 @@ def test_create_campaign_returns_202(client, monkeypatch, campaign_payload):
 	assert body["status"] == CampaignStatus.PENDING
 	assert called["added"] is True
 	assert called["run"] is True
+	assert called["saved"] is True
 
 
 def test_campaign_status_returns_404_for_unknown(client, monkeypatch):

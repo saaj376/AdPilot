@@ -63,6 +63,7 @@ class BaseAgent:
         backstory: str,
         tools: list = None,
         use_system_prompt: bool = True,
+        max_iter: int = 8,
     ) -> Agent:
         """
         Creates and returns a configured CrewAI Agent.
@@ -125,7 +126,7 @@ class BaseAgent:
 
             # Maximum number of tool calls before the agent gives up
             # Prevents infinite loops if a tool keeps returning unexpected results
-            max_iter=8,
+            max_iter=max_iter,
 
             # Maximum number of parse-error retries before CrewAI forces a final answer.
             # Default is unlimited — 2 retries is enough for a local LLM.

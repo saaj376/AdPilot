@@ -1,17 +1,17 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { CampaignForm, type CampaignFormValues } from '../components/campaign/CampaignForm'
 import { TopNav } from '../components/layout/TopNav'
 import { createCampaign } from '../services/api'
 
 function parseBudget(input: string): number {
-	const cleaned = input.replace(/[^0-9.]/g, '')
-	return Number.parseFloat(cleaned)
+	const cleaned = input.replace(/[$,\s]/g, '')
+	return Number(cleaned)
 }
 
 function parseGeoTargets(input: string): string[] {
 	const targets = input
-		.split(',')
+		.split(/[;\n]/)
 		.map((item) => item.trim())
 		.filter(Boolean)
 
@@ -20,8 +20,11 @@ function parseGeoTargets(input: string): string[] {
 
 export function NewCampaignPage() {
 	const navigate = useNavigate()
+	const location = useLocation()
+	const source = location.state as { businessDescription?: string; researchBriefId?: string } | null
 	const [values, setValues] = useState<CampaignFormValues>({
-		businessDescription: '',
+		businessDescription: source?.businessDescription ?? '',
+		landingPageUrl: '',
 		monthlyBudgetText: '$500',
 		geoTargetsText: 'United States',
 	})
@@ -46,6 +49,8 @@ export function NewCampaignPage() {
 		try {
 			setSubmitting(true)
 			const response = await createCampaign({
+				research_brief_id: source?.researchBriefId,
+				landing_page_url: values.landingPageUrl.trim(),
 				business_description: description,
 				monthly_budget: budget,
 				geo_targets: parseGeoTargets(values.geoTargetsText),
@@ -65,6 +70,7 @@ export function NewCampaignPage() {
 				subtitle="Fill in business details and launch the full multi-agent pipeline"
 			/>
 
+			{source?.researchBriefId && <p className="research-intro">Your research brief is attached. Its findings will guide keyword and ad themes. Confirm your product facts and add your business website before continuing.</p>}
 			<CampaignForm
 				values={values}
 				submitting={submitting}

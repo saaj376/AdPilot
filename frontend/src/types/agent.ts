@@ -33,6 +33,7 @@ export interface WebSocketAgentUpdateMessage {
 
 export interface WebSocketPipelineDoneMessage {
 	type: 'pipeline_done'
+	campaign_status: import('./campaign').CampaignStatus
 	campaign_id: string
 }
 

@@ -1,6 +1,8 @@
 import type { CampaignContext, CampaignStatus } from './campaign'
 
 export interface CreateCampaignRequest {
+	research_brief_id?: string
+	landing_page_url?: string
 	business_description: string
 	monthly_budget: number
 	geo_targets: string[]

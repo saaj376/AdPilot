@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pydantic import BaseModel, Field
 
@@ -22,7 +22,7 @@ class AgentLog(BaseModel):
     agent_name: str
     message:    str
     level:      LogLevel            = LogLevel.INFO
-    timestamp:  datetime            = Field(default_factory=datetime.utcnow)
+    timestamp:  datetime            = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 #agent run state gives the complete picture of one agent across it's entire run. 
@@ -44,4 +44,4 @@ class PipelineEvent(BaseModel):
     status:      AgentStatus
     output:      dict | None       = None
     log:         AgentLog | None    = None
-    timestamp:   datetime           = Field(default_factory=datetime.utcnow)
+    timestamp:   datetime           = Field(default_factory=lambda: datetime.now(timezone.utc))

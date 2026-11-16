@@ -3,6 +3,7 @@ import json
 from fastapi.testclient import TestClient
 
 import main
+import api.campaigns as campaigns_api
 
 
 async def _noop_async() -> None:
@@ -30,6 +31,10 @@ def test_actual_not_found_campaign_response(monkeypatch):
     monkeypatch.setattr(main, "startup", _noop_async)
     monkeypatch.setattr(main, "shutdown", _noop_async)
 
+    async def missing_context(_campaign_id):
+        return None
+
+    monkeypatch.setattr(campaigns_api, "load_context", missing_context)
     with TestClient(main.app) as client:
         response = client.get("/campaigns/does-not-exist")
 

@@ -1,7 +1,8 @@
 import { NavLink } from 'react-router-dom'
 
 const navItems = [
-	{ to: '/', label: 'Home' },
+	{ to: '/', label: 'Video Research' },
+	{ to: '/campaigns', label: 'Campaigns' },
 	{ to: '/campaigns/new', label: 'New Campaign' },
 	{ to: '/reports', label: 'Reports' },
 ]
@@ -13,7 +14,7 @@ export function Sidebar() {
 				<span className="brand-mark">AD</span>
 				<div>
 					<h1>AdPilot AI</h1>
-					<p>Campaign Control</p>
+					<p>Evidence to Experiments</p>
 				</div>
 			</div>
 
@@ -22,6 +23,7 @@ export function Sidebar() {
 					<NavLink
 						key={item.to}
 						to={item.to}
+						end={item.to === '/'}
 						className={({ isActive }) =>
 							isActive ? 'sidebar-link sidebar-link-active' : 'sidebar-link'
 						}

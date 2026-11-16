@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { AgentLog } from '../components/agents/AgentLog'
@@ -393,13 +393,14 @@ export function CampaignDetailPage() {
 	// so we don't gate them behind this — only the metrics sidebar needs it.
 	const campaignLoadedRef = useRef(false)
 	const wsHealthyRef = useRef(false)
-	const logPanelRef = useRef<HTMLDivElement | null>(null)
 
 	useEffect(() => {
 		if (!campaignId) {
 			return undefined
 		}
 
+		wsHealthyRef.current = false
+		campaignLoadedRef.current = false
 		const activeCampaignId = campaignId
 
 		let cancelled = false
@@ -409,6 +410,7 @@ export function CampaignDetailPage() {
 				const context = await getCampaign(activeCampaignId)
 				if (!cancelled) {
 					campaignLoadedRef.current = true
+					setError(null)
 					setCampaign(context)
 					setAgentStates((prev) => {
 						const next = { ...prev, ...context.agent_states }
@@ -434,6 +436,7 @@ export function CampaignDetailPage() {
 		const disconnect = connectCampaignWebSocket(
 			activeCampaignId,
 			(message: CampaignWsMessage) => {
+				if (cancelled) return
 				setError(null)
 				wsHealthyRef.current = true
 
@@ -500,7 +503,7 @@ export function CampaignDetailPage() {
 				}
 
 				if (message.type === 'pipeline_done') {
-					setCampaign((prev) => (prev ? { ...prev, campaign_status: 'DONE' } : prev))
+					setCampaign((prev) => (prev ? { ...prev, campaign_status: message.campaign_status } : prev))
 					void loadContext()
 				}
 			},
@@ -517,7 +520,7 @@ export function CampaignDetailPage() {
 		}
 	}, [campaignId])
 
-	const performanceData = (campaign?.performance_data ?? {}) as Record<string, unknown>
+	const performanceData = useMemo(() => campaign?.performance_data ?? {}, [campaign?.performance_data])
 	const chartData = useMemo(() => extractSeries(performanceData), [performanceData])
 	const totalSpend =
 		toMetric(performanceData, 'spend') ||
@@ -556,9 +559,9 @@ export function CampaignDetailPage() {
 		return campaign[field]
 	}, [agentStates, campaign, selectedAgent])
 
-	function scrollToLogs(): void {
-		logPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-	}
+	const scrollToLogs = useCallback((): void => {
+		document.getElementById('campaign-logs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+	}, [])
 
 	if (!campaignId) {
 		return <p className="form-error">Missing campaign id.</p>
@@ -601,7 +604,7 @@ export function CampaignDetailPage() {
 							)}
 						</div>
 					</section>
-					<div ref={logPanelRef}>
+					<div id="campaign-logs">
 						<AgentLog lines={logs} />
 					</div>
 				</div>

@@ -109,7 +109,7 @@ def search_competitors(business_type: str, location: str) -> list[dict]:
             snippet = snippet_tag.get_text() if snippet_tag else ""
 
             # Scrape the actual page for more detail
-            scraped = scrape_website(url)
+            scraped = scrape_website.run(url=url)
 
             competitors.append({
                 "name":         title,
@@ -124,7 +124,7 @@ def search_competitors(business_type: str, location: str) -> list[dict]:
         # ResearchAgent will note these are estimated competitors.
         competitors = _fallback_competitors(business_type, location)
 
-    return competitors
+    return competitors or _fallback_competitors(business_type, location)
 
 
 def _fallback_competitors(business_type: str, location: str) -> list[dict]:
@@ -135,21 +135,11 @@ def _fallback_competitors(business_type: str, location: str) -> list[dict]:
     """
     return [
         {
-            "name":         f"Top {business_type.title()} in {location}",
-            "url":          "",
-            "snippet":      f"Leading {business_type} serving {location} area. Known for quality and fast service.",
-            "scraped_text": f"We are the premier {business_type} in {location}. Offering the best experience since 2010. Visit us today.",
-        },
-        {
-            "name":         f"Best {business_type.title()} {location}",
-            "url":          "",
-            "snippet":      f"Award-winning {business_type} with great reviews. Serving {location} for over 10 years.",
-            "scraped_text": f"Family owned {business_type} in {location}. Fresh ingredients, great prices, fast delivery.",
-        },
-        {
-            "name":         f"{location} {business_type.title()} Co.",
-            "url":          "",
-            "snippet":      f"Popular local {business_type} with loyal customer base in {location}.",
-            "scraped_text": f"Your neighbourhood {business_type} in {location}. Dine in, takeout, and delivery available.",
-        },
+            "name": f"Unverified {business_type} competitor {index} in {location}",
+            "url": "",
+            "snippet": "Live competitor research unavailable. This is a placeholder, not a verified business.",
+            "scraped_text": "",
+            "verified": False,
+        }
+        for index in range(1, 4)
     ]

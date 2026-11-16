@@ -1,4 +1,5 @@
 import asyncio
+import json
 import concurrent.futures
 from collections.abc import Coroutine
 from crewai import Crew, Process
@@ -37,151 +38,36 @@ def _parse_agent_output(raw_output) -> dict:
     """
     Extracts the output dict from a CrewAI TaskOutput object.
     CrewAI returns a TaskOutput — we pull the raw string and parse it.
-    Falls back to empty dict if parsing fails — pipeline keeps moving.
+    Rejects invalid output so a failed task cannot appear successful.
     """
     import json
     import re
 
-    def _extract_json_from_text(value: str) -> dict | None:
-        # Prefer explicit "Final Answer:" payload if present.
-        marker_match = re.search(r"final answer\s*:\s*(.*)$", value, flags=re.IGNORECASE | re.DOTALL)
-        candidates = [marker_match.group(1)] if marker_match else []
-        candidates.append(value)
-
-        for candidate in candidates:
-            # Try fenced JSON blocks first.
-            fence_blocks = re.findall(r"```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```", candidate, flags=re.DOTALL)
-            for block in fence_blocks:
-                try:
-                    parsed = json.loads(block)
-                    if isinstance(parsed, dict):
-                        return parsed
-                    return {"data": parsed}
-                except Exception:
-                    continue
-
-            # Try to parse the last balanced JSON object from plain text.
-            starts = [i for i, ch in enumerate(candidate) if ch == "{"]
-            for start in reversed(starts):
-                depth = 0
-                for idx in range(start, len(candidate)):
-                    ch = candidate[idx]
-                    if ch == "{":
-                        depth += 1
-                    elif ch == "}":
-                        depth -= 1
-                        if depth == 0:
-                            snippet = candidate[start : idx + 1]
-                            try:
-                                parsed = json.loads(snippet)
-                                if isinstance(parsed, dict):
-                                    return parsed
-                                return {"data": parsed}
-                            except Exception:
-                                break
-
-            # Fallback: list payloads.
-            starts_list = [i for i, ch in enumerate(candidate) if ch == "["]
-            for start in reversed(starts_list):
-                depth = 0
-                for idx in range(start, len(candidate)):
-                    ch = candidate[idx]
-                    if ch == "[":
-                        depth += 1
-                    elif ch == "]":
-                        depth -= 1
-                        if depth == 0:
-                            snippet = candidate[start : idx + 1]
-                            try:
-                                parsed = json.loads(snippet)
-                                return {"data": parsed}
-                            except Exception:
-                                break
-
-        return None
-
-    def _try_parse_text(value: str) -> dict | None:
-        """Attempt to parse valid JSON from a string, with multiple fallbacks."""
-        cleaned = re.sub(r"```(?:json)?\s*", "", value).strip().rstrip("`").strip()
-        if not cleaned:
-            return None
-
-        # 1. Try extracting JSON from common patterns
-        extracted = _extract_json_from_text(cleaned)
-        if extracted is not None:
-            return extracted
-
-        # 2. Try parsing the whole thing as literal JSON
+    if isinstance(raw_output, dict):
+        return raw_output
+    structured = getattr(raw_output, "json_dict", None)
+    if isinstance(structured, dict):
+        return structured
+    model = getattr(raw_output, "pydantic", None)
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    value = getattr(raw_output, "raw", raw_output)
+    if not isinstance(value, str):
+        value = str(value)
+    # Decode from the outside in; starting at the last brace loses parent keys.
+    marker = re.search(r"final answer\s*:\s*", value, re.IGNORECASE)
+    if marker:
+        value = value[marker.end():]
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(value):
+        if char not in "{[":
+            continue
         try:
-            parsed = json.loads(cleaned)
-            if isinstance(parsed, dict):
-                return parsed
-            return {"data": parsed}
-        except Exception:
-            pass
-
-        # 3. Final fallback: if it looks like a list or dict but failed above,
-        # it might have trailing garbage. Try one last time with a loose match.
-        if cleaned.startswith("{") or cleaned.startswith("["):
-             # This is a bit redundant with _extract_json_from_text but serves as a safety net
-             try:
-                 # Very basic attempt to find middle ground
-                 return _extract_json_from_text(cleaned + "}") or _extract_json_from_text(cleaned + "]")
-             except:
-                 pass
-
-        return None
-
-    def _from_candidate(candidate) -> dict | None:
-        if candidate is None:
-            return None
-
-        if isinstance(candidate, dict):
-            return candidate
-
-        if isinstance(candidate, str):
-            parsed = _try_parse_text(candidate)
-            return parsed if parsed is not None else {"raw": candidate}
-
-        json_dict = getattr(candidate, "json_dict", None)
-        if isinstance(json_dict, dict) and json_dict:
-            return json_dict
-
-        pydantic_obj = getattr(candidate, "pydantic", None)
-        if hasattr(pydantic_obj, "model_dump"):
-            return pydantic_obj.model_dump()
-
-        raw_text = getattr(candidate, "raw", None)
-        if isinstance(raw_text, str):
-            parsed = _try_parse_text(raw_text)
-            return parsed if parsed is not None else {"raw": raw_text}
-
-        output_text = getattr(candidate, "output", None)
-        if isinstance(output_text, str):
-            parsed = _try_parse_text(output_text)
-            return parsed if parsed is not None else {"raw": output_text}
-
-        return None
-
-    candidates = [
-        raw_output,
-        getattr(raw_output, "output", None),
-        getattr(raw_output, "task_output", None),
-        getattr(raw_output, "result", None),
-        getattr(raw_output, "raw_output", None),
-    ]
-
-    for candidate in candidates:
-        parsed = _from_candidate(candidate)
-        if parsed is not None:
-            return parsed
-
-    # Bug 5 fix: Instead of a flat "raw" key, provide a "summary" key
-    # which the frontend heuristics (regex) are more likely to pick up.
-    return {
-        "summary": str(raw_output),
-        "raw": str(raw_output)
-    }
+            parsed, _ = decoder.raw_decode(value[index:])
+            return parsed if isinstance(parsed, dict) else {"data": parsed}
+        except json.JSONDecodeError:
+            continue
+    raise ValueError("Agent returned no valid JSON output")
 
 _ROLE_TO_AGENT_NAME = {
     "Business Research Specialist":          AgentName.RESEARCH,
@@ -275,31 +161,17 @@ def build_crew(context: CampaignContext, event_loop: asyncio.AbstractEventLoop) 
     in the exact order listed — never in parallel.
     """
  
-    # step_callback fires after each task completes
-    # We use it to update context, save to Redis, and push WebSocket events
+    # Callbacks run in kickoff's worker thread. Wait for persistence and event
+    # delivery before allowing the next task or terminal state to proceed.
     def _schedule(coro: Coroutine) -> None:
-        """Schedule coroutine from either event-loop or worker-thread callbacks.
-
-        asyncio.ensure_future is the thread-safe way to schedule a coroutine.
-        create_task inside call_soon_threadsafe is NOT safe — the lambda runs
-        on the event-loop thread but create_task can still misbehave depending
-        on the Python version, silently dropping WebSocket publish calls.
-        """
-        try:
-            running_loop = asyncio.get_running_loop()
-        except RuntimeError:
-            running_loop = None
-
-        if running_loop is event_loop:
-            asyncio.ensure_future(coro, loop=event_loop)
-            return
-
-        event_loop.call_soon_threadsafe(asyncio.ensure_future, coro)
+        asyncio.run_coroutine_threadsafe(coro, event_loop).result()
 
     step_index = 0
 
     def on_step(step_output):
         nonlocal step_index
+        if context.campaign_status == CampaignStatus.FAILED:
+            raise RuntimeError("Pipeline has already failed")
         agent_name = _resolve_agent_name(step_output, step_index)
  
         if not agent_name:
@@ -309,6 +181,12 @@ def build_crew(context: CampaignContext, event_loop: asyncio.AbstractEventLoop) 
         agent_order_index = _STEP_ORDER.index(agent_name) if agent_name in _STEP_ORDER else -1
 
         output = _parse_agent_output(step_output)
+        if output.get("error"):
+            raise ValueError(f"{agent_name}: {output['error']}")
+        if agent_name == AgentName.QA and output.get("overall_approved") is not True:
+            raise ValueError("Policy review did not approve the campaign; launch stopped")
+        if agent_name == AgentName.LAUNCH and not output.get("campaign_id"):
+            raise ValueError("Launch returned no campaign ID")
         field = _AGENT_OUTPUT_FIELD.get(agent_name)
         if field and hasattr(context, field):
             setattr(context, field, _normalize_field_value(field, output))
@@ -365,7 +243,7 @@ def build_crew(context: CampaignContext, event_loop: asyncio.AbstractEventLoop) 
                 )
                 _schedule(event_bus.publish(context.campaign_id, next_event))
  
-    return Crew(
+    crew = Crew(
         agents=[
             research_agent,
             keyword_agent,
@@ -387,9 +265,13 @@ def build_crew(context: CampaignContext, event_loop: asyncio.AbstractEventLoop) 
             report_task,
         ],
         process=Process.sequential,   # one agent at a time, in order
-        step_callback=on_step,        # fires after each task completes
+        task_callback=on_step,        # only completed tasks, never tool actions
         verbose=True,                 # prints agent thinking to console
     )
+    # CrewAI mutates tasks and agents during execution. Copy the graph together
+    # so task.context references stay linked while concurrent campaigns isolate.
+    return crew.copy()
+
 
 
 async def run_crew(
@@ -397,6 +279,8 @@ async def run_crew(
     business_description: str,
     monthly_budget: float,
     geo_targets: list[str],
+    landing_page_url: str = "",
+    research_brief: dict | None = None,
 ) -> CampaignContext:
     """
     Main entry point called by POST /campaigns API endpoint.
@@ -421,6 +305,8 @@ async def run_crew(
     # Create a fresh context for this campaign
     context = CampaignContext(
         campaign_id=campaign_id,
+        landing_page_url=landing_page_url,
+        research_brief=research_brief,
         business_description=business_description,
         monthly_budget=monthly_budget,
         geo_targets=geo_targets,
@@ -459,6 +345,10 @@ async def run_crew(
                 asyncio.to_thread(
                     crew.kickoff,
                     inputs={
+                        "landing_page_url": landing_page_url,
+                        "video_research": json.dumps({
+                            'input': research_brief.get('input'), 'analysis': research_brief.get('analysis')
+                        }) if research_brief else 'No video research supplied.',
                         "business_description": business_description,
                         "monthly_budget":       monthly_budget,
                         "geo_targets":          str(geo_targets),
@@ -476,16 +366,21 @@ async def run_crew(
                 "Pipeline worker thread timed out while executing Crew kickoff."
             ) from exc
  
+        if not context.is_complete():
+            raise RuntimeError("Pipeline ended before all agent tasks completed")
         # All agents completed — mark as done
         context.campaign_status = CampaignStatus.DONE
         await save_context(campaign_id, context)
  
     except Exception as e:
         # Something failed — mark campaign as failed and save
+        for name, state in context.agent_states.items():
+            if state.status == "RUNNING":
+                context.set_agent_failed(name, str(e))
+                context.add_log(name, str(e), level="ERROR")
         context.campaign_status = CampaignStatus.FAILED
         context.add_log("pipeline", f"Pipeline failed: {str(e)}", level="ERROR")
         await save_context(campaign_id, context)
-        raise
 
     finally:
         # Always signal WebSocket listeners that this run reached a terminal state.

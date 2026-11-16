@@ -1,8 +1,10 @@
 from uuid import uuid4
+from services.video_research import load_brief
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from core.crew import run_crew
+from core.campaign_context import CampaignContext
 from models.campaign import (
     CampaignCreateRequest,
     CampaignCreateResponse,
@@ -12,6 +14,7 @@ from services.redis_store import (
     add_active_campaign,
     get_all_campaign_ids,
     load_context,
+    save_context,
 )
 router = APIRouter()
 
@@ -31,8 +34,23 @@ async def create_campaign(
     Status 202 means "accepted" — the request was valid and work has started,
     but it's not finished yet. This is the correct HTTP status for async jobs.
     """
+    research_brief = None
+    if request.research_brief_id:
+        research_brief = await load_brief(request.research_brief_id)
+        if research_brief is None or research_brief['status'] != 'ready':
+            raise HTTPException(422, 'Select a completed research brief before creating the campaign')
+
     # Generate a unique ID for this campaign
     campaign_id = str(uuid4())
+
+    await save_context(campaign_id, CampaignContext(
+        campaign_id=campaign_id,
+        landing_page_url=str(request.landing_page_url or ""),
+        research_brief=research_brief,
+        business_description=request.business_description,
+        monthly_budget=request.monthly_budget,
+        geo_targets=request.geo_targets,
+    ))
 
     # Register it in the active campaigns set in Redis
     await add_active_campaign(campaign_id)
@@ -42,6 +60,8 @@ async def create_campaign(
     background_tasks.add_task(
         run_crew,
         campaign_id=campaign_id,
+        landing_page_url=str(request.landing_page_url or ""),
+        research_brief=research_brief,
         business_description=request.business_description,
         monthly_budget=request.monthly_budget,
         geo_targets=request.geo_targets,

@@ -15,6 +15,8 @@ export function connectCampaignWebSocket(
 	let socket: WebSocket | null = null
 	let closedByClient = false
 	let attempts = 0
+	let completed = false
+	let retryTimer: number | undefined
 
 	const connect = () => {
 		if (closedByClient) {
@@ -30,6 +32,7 @@ export function connectCampaignWebSocket(
 		socket.onmessage = (event) => {
 			try {
 				const payload = JSON.parse(event.data) as CampaignWsMessage
+				if (payload.type === 'pipeline_done') completed = true
 				onMessage(payload)
 			} catch {
 				// Ignore malformed payloads and continue streaming future events.
@@ -43,7 +46,7 @@ export function connectCampaignWebSocket(
 		}
 
 		socket.onclose = (event) => {
-			if (closedByClient) {
+			if (closedByClient || completed || event.code === 1008) {
 				return
 			}
 
@@ -55,7 +58,7 @@ export function connectCampaignWebSocket(
 			if (attempts < 5) {
 				const delayMs = 600 * Math.max(1, attempts + 1)
 				attempts += 1
-				window.setTimeout(connect, delayMs)
+				retryTimer = window.setTimeout(connect, delayMs)
 			}
 		}
 	}
@@ -64,6 +67,7 @@ export function connectCampaignWebSocket(
 
 	return () => {
 		closedByClient = true
+		window.clearTimeout(retryTimer)
 		if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
 			socket.close()
 		}

@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react'
 
 export interface CampaignFormValues {
+	landingPageUrl: string
 	businessDescription: string
 	monthlyBudgetText: string
 	geoTargetsText: string
@@ -49,6 +50,11 @@ export function CampaignForm({
 			/>
 			<p className="field-hint">Minimum 20 characters. Current: {descriptionLength}</p>
 
+			<label htmlFor="landing-page" className="field-label">Business Website</label>
+			<input id="landing-page" className="field-input" type="url" required
+				placeholder="https://your-business.com" value={values.landingPageUrl}
+				onChange={(event) => onChange({ ...values, landingPageUrl: event.target.value })} />
+
 			<div className="form-grid-two">
 				<div>
 					<label htmlFor="budget" className="field-label">
@@ -83,9 +89,9 @@ export function CampaignForm({
 								geoTargetsText: event.target.value,
 							})
 						}
-						placeholder="United States, United Kingdom, Canada"
+						placeholder="Austin, TX; Dallas, TX"
 					/>
-					<p className="field-hint">Comma-separated regions or countries.</p>
+					<p className="field-hint">Separate locations with semicolons, e.g. Austin, TX; Dallas, TX.</p>
 				</div>
 			</div>
 

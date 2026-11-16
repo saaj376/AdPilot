@@ -39,7 +39,7 @@ export function AgentPipeline({
 	onSelectAgent,
 }: AgentPipelineProps) {
 	// Re-render every second to update live timers for 'RUNNING' agents
-	const [now, setNow] = useState(Date.now())
+	const [now, setNow] = useState(() => Date.now())
 
 	useEffect(() => {
 		const hasRunning = Object.values(agentStates).some((s) => s.status === 'RUNNING')

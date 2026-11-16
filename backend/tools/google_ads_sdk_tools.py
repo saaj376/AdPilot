@@ -1,3 +1,5 @@
+import math
+
 from crewai.tools import tool
 from google.ads.googleads.errors import GoogleAdsException
 
@@ -93,6 +95,8 @@ def get_keyword_ideas(seed_keywords: list[str], location: str) -> list[dict]:
                 "avg_monthly_searches": volume,
                 "cpc": cpc,
                 "competition": competition,
+                "estimated": True,
+                "source": "heuristic expansion; not Google Keyword Planner data",
             }
         )
 
@@ -119,9 +123,26 @@ def create_campaign(name: str, monthly_budget: float, geo_targets: list[str]) ->
     Returns:
         Dict with campaign_id, name, status, daily_budget
     """
+    if not math.isfinite(monthly_budget) or monthly_budget <= 0:
+        raise ValueError("Monthly budget must be finite and positive")
+    if not geo_targets:
+        raise ValueError("At least one geographic target is required")
     try:
         client = get_client()
         customer_id = settings.GOOGLE_ADS_CUSTOMER_ID
+        geo_service = client.get_service("GeoTargetConstantService")
+        suggestion_request = client.get_type("SuggestGeoTargetConstantsRequest")
+        suggestion_request.locale = "en"
+        suggestion_request.location_names.names.extend(geo_targets)
+        suggestions = geo_service.suggest_geo_target_constants(request=suggestion_request)
+        geo_resources = set()
+        for target in geo_targets:
+            matches = [item.geo_target_constant.resource_name
+                       for item in suggestions.geo_target_constant_suggestions
+                       if item.search_term.casefold() == target.casefold()]
+            if len(set(matches)) != 1:
+                raise ValueError(f"Geographic target is unresolved or ambiguous: {target}")
+            geo_resources.update(matches)
 
         campaign_budget_service = client.get_service("CampaignBudgetService")
         campaign_service = client.get_service("CampaignService")
@@ -130,7 +151,7 @@ def create_campaign(name: str, monthly_budget: float, geo_targets: list[str]) ->
         # Google Ads works with daily budgets internally
         # Users think in monthly so we divide by 30
         # Google stores money in micros (1 USD = 1,000,000 micros)
-        daily_budget_micros = int((monthly_budget / 30) * 1_000_000)
+        daily_budget_micros = int((monthly_budget / 30.4) * 1_000_000)
 
         budget_op = client.get_type("CampaignBudgetOperation")
         budget = budget_op.create
@@ -154,6 +175,10 @@ def create_campaign(name: str, monthly_budget: float, geo_targets: list[str]) ->
             client.enums.AdvertisingChannelTypeEnum.SEARCH
         )
         campaign.campaign_budget = budget_resource
+        campaign.manual_cpc.enhanced_cpc_enabled = False
+        campaign.contains_eu_political_advertising = (
+            client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+        )
         campaign.network_settings.target_google_search = True
         campaign.network_settings.target_search_network = True
 
@@ -165,12 +190,21 @@ def create_campaign(name: str, monthly_budget: float, geo_targets: list[str]) ->
         # We split on "/" and take the last part to get just the numeric ID
         campaign_resource = campaign_response.results[0].resource_name
         campaign_id = campaign_resource.split("/")[-1]
+        operations = []
+        for geo_resource in sorted(geo_resources):
+            operation = client.get_type("CampaignCriterionOperation")
+            operation.create.campaign = campaign_resource
+            operation.create.location.geo_target_constant = geo_resource
+            operations.append(operation)
+        client.get_service("CampaignCriterionService").mutate_campaign_criteria(
+            customer_id=customer_id, operations=operations
+        )
 
         return {
             "campaign_id":   campaign_id,
             "campaign_name": name,
             "status":        "PAUSED",
-            "daily_budget":  monthly_budget / 30,
+            "daily_budget":  monthly_budget / 30.4,
             "resource_name": campaign_resource,
         }
 
@@ -230,6 +264,35 @@ def create_ad_group(campaign_id: str, name: str) -> dict:
         return {"error": handle_google_ads_error(ex)}
 
 
+@tool("Add keywords")
+def add_keywords(ad_group_id: str, keywords: list[dict]) -> dict:
+    """Add keyword criteria with text, match_type and cpc to an ad group."""
+    from models.campaign import Keyword
+
+    if not keywords:
+        raise ValueError("An ad group must have keywords")
+    validated = [Keyword.model_validate({**item, "bid": item.get("cpc", item.get("bid", 1.0))})
+                 for item in keywords]
+    client = get_client()
+    customer_id = settings.GOOGLE_ADS_CUSTOMER_ID
+    service = client.get_service("AdGroupCriterionService")
+    operations = []
+    for keyword in validated:
+        if not keyword.text.strip() or not math.isfinite(keyword.bid) or keyword.bid <= 0:
+            raise ValueError("Keyword text and a positive finite bid are required")
+        operation = client.get_type("AdGroupCriterionOperation")
+        criterion = operation.create
+        criterion.ad_group = client.get_service("AdGroupService").ad_group_path(customer_id, ad_group_id)
+        criterion.status = client.enums.AdGroupCriterionStatusEnum.ENABLED
+        criterion.keyword.text = keyword.text
+        criterion.keyword.match_type = getattr(client.enums.KeywordMatchTypeEnum, keyword.match_type.value)
+        criterion.cpc_bid_micros = round(keyword.bid * 1_000_000)
+        operations.append(operation)
+    response = service.mutate_ad_group_criteria(customer_id=customer_id, operations=operations)
+    return {"ad_group_id": ad_group_id,
+            "keyword_ids": [result.resource_name.rsplit("~", 1)[-1] for result in response.results]}
+
+
 @tool("Create responsive search ads")
 def create_ads(
     ad_group_id: str,
@@ -252,6 +315,14 @@ def create_ads(
     Returns:
         Dict with ad_id and status
     """
+    from pydantic import HttpUrl, TypeAdapter
+    TypeAdapter(HttpUrl).validate_python(final_url)
+    if not 3 <= len(headlines) <= 15 or not 2 <= len(descriptions) <= 4:
+        raise ValueError("Ads require 3–15 headlines and 2–4 descriptions")
+    if any(not text.strip() or len(text) > 30 for text in headlines):
+        raise ValueError("Headlines must be nonempty and at most 30 characters")
+    if any(not text.strip() or len(text) > 90 for text in descriptions):
+        raise ValueError("Descriptions must be nonempty and at most 90 characters")
     try:
         client = get_client()
         customer_id = settings.GOOGLE_ADS_CUSTOMER_ID
@@ -408,9 +479,26 @@ def reallocate_budget(campaign_id: str, new_monthly_budget: float) -> dict:
     Returns:
         Dict with campaign_id, new_daily_budget, status
     """
+    if not math.isfinite(monthly_budget) or monthly_budget <= 0:
+        raise ValueError("Monthly budget must be finite and positive")
+    if not geo_targets:
+        raise ValueError("At least one geographic target is required")
     try:
         client = get_client()
         customer_id = settings.GOOGLE_ADS_CUSTOMER_ID
+        geo_service = client.get_service("GeoTargetConstantService")
+        suggestion_request = client.get_type("SuggestGeoTargetConstantsRequest")
+        suggestion_request.locale = "en"
+        suggestion_request.location_names.names.extend(geo_targets)
+        suggestions = geo_service.suggest_geo_target_constants(request=suggestion_request)
+        geo_resources = set()
+        for target in geo_targets:
+            matches = [item.geo_target_constant.resource_name
+                       for item in suggestions.geo_target_constant_suggestions
+                       if item.search_term.casefold() == target.casefold()]
+            if len(set(matches)) != 1:
+                raise ValueError(f"Geographic target is unresolved or ambiguous: {target}")
+            geo_resources.update(matches)
 
         campaign_budget_service = client.get_service("CampaignBudgetService")
         ga_service = client.get_service("GoogleAdsService")
@@ -426,7 +514,7 @@ def reallocate_budget(campaign_id: str, new_monthly_budget: float) -> dict:
         budget_resource = row.campaign_budget.resource_name
 
         # Update the budget
-        new_daily_micros = int((new_monthly_budget / 30) * 1_000_000)
+        new_daily_micros = int((new_monthly_budget / 30.4) * 1_000_000)
 
         budget_op = client.get_type("CampaignBudgetOperation")
         budget = budget_op.update
@@ -439,7 +527,7 @@ def reallocate_budget(campaign_id: str, new_monthly_budget: float) -> dict:
 
         return {
             "campaign_id":      campaign_id,
-            "new_daily_budget": new_monthly_budget / 30,
+            "new_daily_budget": new_monthly_budget / 30.4,
             "status":           "UPDATED",
         }
 

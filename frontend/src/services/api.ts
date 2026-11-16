@@ -21,7 +21,7 @@ class ApiError extends Error {
 	}
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	const response = await fetch(`${API_BASE_URL}${path}`, {
 		headers: {
 			'Content-Type': 'application/json',
@@ -31,11 +31,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	})
 
 	if (!response.ok) {
-		let body: unknown = null
+		const responseText = await response.text()
+		let body: unknown = responseText
 		try {
-			body = await response.json()
+			body = JSON.parse(responseText)
 		} catch {
-			body = await response.text()
+			// Keep non-JSON server responses readable.
 		}
 		throw new ApiError(`Request failed for ${path}`, response.status, body)
 	}

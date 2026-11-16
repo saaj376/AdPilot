@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, HttpUrl
 
 #this is a google ads concept, when we add a keyword to a campaign, we can specify how closely the keyword should match the user's search query.
 #the keyword agent would be using this to build realistic keywords for the campaign, and the ad agent would be using this to build realistic ads for the campaign.
@@ -59,9 +59,24 @@ class Campaign(BaseModel):
 #this is what the frontend will send to POST/campaigns. the three things are field of min length 20 on business description which forces the user to write something meaningful. the research agent needs this to work with.
 #the budget should be greater than 0, and the geo targets default to United States if the user doesn't specify any. The launch agent will use this information to create the campaign and pass it to the mock tools.
 class CampaignCreateRequest(BaseModel):
-    business_description:   str             = Field(min_length=20)
-    monthly_budget:         float           = Field(gt=0)
+    research_brief_id: str | None = Field(default=None, pattern=r"^[a-f0-9-]{36}$")
+    landing_page_url: HttpUrl | None = None
+    business_description:   str             = Field(min_length=20, max_length=10000)
+    monthly_budget:         float           = Field(gt=0, allow_inf_nan=False)
     geo_targets:            list[str]       = ["United States"]
+
+    @field_validator("business_description", mode="before")
+    @classmethod
+    def trim_description(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("geo_targets")
+    @classmethod
+    def validate_geo_targets(cls, value):
+        targets = list(dict.fromkeys(target.strip() for target in value if target.strip()))
+        if not targets:
+            raise ValueError("At least one geographic target is required")
+        return targets
 
 
 class CampaignCreateResponse(BaseModel):

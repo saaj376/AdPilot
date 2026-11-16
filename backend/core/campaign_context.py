@@ -1,7 +1,7 @@
 #campaign_context.py is a shared notebook passed between all the 8 agents. 
 #Each agent reads what previous agents wrote, does its job, and writes its own output into it.
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from models.campaign import Campaign, CampaignStatus
 from models.agent_run import AgentRunState, AgentStatus
@@ -25,11 +25,13 @@ class AgentName:
 class CampaignContext(BaseModel):
 
 #these are the inputs which will be provided by the user when they hit POST/campaigns. 
+    research_brief: dict | None = None
+    landing_page_url:       str = ""
     campaign_id:            str
     business_description:   str
     monthly_budget:         float
     geo_targets:            list[str]       = ["United States"]
-    created_at:             datetime        = Field(default_factory=datetime.utcnow)
+    created_at:             datetime        = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     campaign_status:        CampaignStatus  = CampaignStatus.PENDING
  
@@ -60,19 +62,19 @@ class CampaignContext(BaseModel):
 #These are called by crew.py's on_step() callback. You never call them directly from agent files — only from the orchestration layer.
     def set_agent_running(self, agent_name: str):
         self.agent_states[agent_name].status     = AgentStatus.RUNNING
-        self.agent_states[agent_name].started_at = datetime.utcnow()
+        self.agent_states[agent_name].started_at = datetime.now(timezone.utc)
         self.campaign_status                      = CampaignStatus.RUNNING
  
     def set_agent_done(self, agent_name: str, output: dict | None = None):
         state              = self.agent_states[agent_name]
         state.status       = AgentStatus.DONE
         state.output       = output
-        state.finished_at  = datetime.utcnow()
+        state.finished_at  = datetime.now(timezone.utc)
  
     def set_agent_failed(self, agent_name: str, error: str):
         state              = self.agent_states[agent_name]
         state.status       = AgentStatus.FAILED
-        state.finished_at  = datetime.utcnow()
+        state.finished_at  = datetime.now(timezone.utc)
         self.campaign_status = CampaignStatus.FAILED
  
     def add_log(self, agent_name: str, message: str, level: str = "INFO"):

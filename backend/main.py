@@ -10,9 +10,10 @@ from config import settings
 async def lifespan(app: FastAPI):
     # ── startup ──────────────────────────────────────────────────────────────
     await startup()
-    yield
-    # ── shutdown ─────────────────────────────────────────────────────────────
-    await shutdown()
+    try:
+        yield
+    finally:
+        await shutdown()
 
 
 app = FastAPI(
@@ -32,7 +33,9 @@ app.add_middleware(
 from api.campaigns import router as campaigns_router
 from api.reports import router as reports_router
 from api.ws import router as ws_router
+from api.research import router as research_router
 
+app.include_router(research_router, prefix="/research", tags=["research"])
 app.include_router(campaigns_router, prefix="/campaigns", tags=["campaigns"])
 app.include_router(reports_router,   prefix="/reports",   tags=["reports"])
 app.include_router(ws_router,        prefix="/live",      tags=["websocket"])
@@ -68,3 +71,6 @@ async def shutdown():
 
     from core.scheduler import stop_scheduler
     stop_scheduler()
+
+    from services.redis_store import close_redis
+    await close_redis()
